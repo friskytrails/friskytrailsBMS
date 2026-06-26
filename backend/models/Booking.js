@@ -1,0 +1,102 @@
+const mongoose = require('mongoose');
+
+const BookingSchema = new mongoose.Schema({
+  bookingId: {
+    type: String,
+    unique: true,
+  },
+  startDate: {
+    type: Date,
+    required: [true, 'Please add a start date'],
+  },
+  endDate: {
+    type: Date,
+    required: [true, 'Please add an end date'],
+  },
+  packageName: {
+    type: String,
+    required: [true, 'Please add a package name'],
+    trim: true,
+  },
+  location: {
+    type: String,
+    required: [true, 'Please add a location'],
+    trim: true,
+  },
+  totalAmount: {
+    type: Number,
+    required: [true, 'Please add a total amount'],
+    min: [0, 'Total amount cannot be negative'],
+  },
+  paidAmount: {
+    type: Number,
+    required: [true, 'Please add a paid amount'],
+    min: [0, 'Paid amount cannot be negative'],
+    default: 0,
+  },
+  dueAmount: {
+    type: Number,
+    default: 0,
+  },
+  transactionId: {
+    type: String,
+    required: [true, 'Please add a transaction ID'],
+    trim: true,
+  },
+  screenshot: {
+    type: String,
+    required: [true, 'Please upload a transaction screenshot'],
+  },
+  travellerName: {
+    type: String,
+    required: [true, 'Please add a traveler name'],
+    trim: true,
+  },
+  travellerEmail: {
+    type: String,
+    required: [true, 'Please add a traveler email'],
+    lowercase: true,
+    trim: true,
+    match: [
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      'Please add a valid email',
+    ],
+  },
+  travellerPhone: {
+    type: String,
+    required: [true, 'Please add a traveler phone number'],
+    trim: true,
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+}, {
+  timestamps: true,
+});
+
+// Auto-generate Booking ID and calculate due amount pre-save
+BookingSchema.pre('save', async function (next) {
+  // Calculate Due Amount
+  this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
+
+  // Generate Booking ID if not exists
+  if (!this.bookingId) {
+    let uniqueIdGenerated = false;
+    while (!uniqueIdGenerated) {
+      const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const tempId = `BK-${randomPart}`;
+      
+      // Check if it already exists
+      const existingBooking = await mongoose.models.Booking.findOne({ bookingId: tempId });
+      if (!existingBooking) {
+        this.bookingId = tempId;
+        uniqueIdGenerated = true;
+      }
+    }
+  }
+  next();
+});
+
+module.exports = mongoose.model('Booking', BookingSchema);
