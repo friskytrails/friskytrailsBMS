@@ -1,11 +1,81 @@
 @import "tailwindcss";
 
+:root {
+  --color-slate-950: #f7f1e7; /* Main page background */
+  --color-slate-900: #ffffff; /* Card/Panel background */
+  --color-slate-850: #faf6f0; /* Soft card highlight */
+  --color-slate-800: #e2d8c9; /* Soft border color */
+  --color-slate-700: #d2c5b3; /* Input border / active border */
+  --color-slate-600: #4b5563; /* Secondary text */
+  --color-slate-500: #6b7280; /* Muted text / placeholder */
+  --color-slate-400: #8c92ac; /* Light metadata text */
+  --color-slate-350: #374151; /* Dark text for selects */
+  --color-slate-300: #1e293b; /* Strong text color */
+  --color-slate-205: #0f172a;
+  --color-slate-202: #0f172a;
+  --color-slate-200: #0a0322; /* Dark text / accent headers */
+  --color-slate-100: #0a0322; /* Primary body text */
+
+  --color-indigo-650: #ff4f14;
+  --color-indigo-600: #ff6321; /* Brand primary orange */
+  --color-indigo-500: #ff6321; /* Active state orange */
+  --color-indigo-400: #d64a00; /* Darker orange links */
+  --color-indigo-300: #c23b00;
+}
+
+.dark {
+  --color-slate-950: #0d0f14; /* Dark main background */
+  --color-slate-900: #161b22; /* Dark card background */
+  --color-slate-850: #1f242c; /* Dark card highlight */
+  --color-slate-800: #2a313c; /* Dark border */
+  --color-slate-700: #3f4958; /* Dark active border */
+  --color-slate-600: #8b949e; /* Light secondary text */
+  --color-slate-500: #768390; /* Muted text */
+  --color-slate-400: #8b949e; /* Light metadata text */
+  --color-slate-350: #c9d1d9; /* Light text for selects */
+  --color-slate-300: #e5e7eb; /* Light strong text */
+  --color-slate-205: #ecf2f8;
+  --color-slate-202: #ecf2f8;
+  --color-slate-200: #f0f6fc; /* White headers */
+  --color-slate-100: #e5e7eb; /* White primary body text */
+
+  --color-indigo-650: #ff5f25;
+  --color-indigo-600: #ff6f32;
+  --color-indigo-500: #ff7f45;
+  --color-indigo-400: #ff8f59;
+  --color-indigo-300: #ffa06d;
+}
+
+@theme {
+  --color-slate-950: var(--color-slate-950);
+  --color-slate-900: var(--color-slate-900);
+  --color-slate-850: var(--color-slate-850);
+  --color-slate-800: var(--color-slate-800);
+  --color-slate-700: var(--color-slate-700);
+  --color-slate-600: var(--color-slate-600);
+  --color-slate-500: var(--color-slate-500);
+  --color-slate-400: var(--color-slate-400);
+  --color-slate-350: var(--color-slate-350);
+  --color-slate-300: var(--color-slate-300);
+  --color-slate-205: var(--color-slate-205);
+  --color-slate-202: var(--color-slate-202);
+  --color-slate-200: var(--color-slate-200);
+  --color-slate-100: var(--color-slate-100);
+
+  --color-indigo-650: var(--color-indigo-650);
+  --color-indigo-600: var(--color-indigo-600);
+  --color-indigo-500: var(--color-indigo-500);
+  --color-indigo-400: var(--color-indigo-400);
+  --color-indigo-300: var(--color-indigo-300);
+}
+
 body {
-  background-color: #020617; /* bg-slate-950 */
-  color: #f1f5f9; /* text-slate-100 */
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-100);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Custom scrollbar for premium aesthetics */
@@ -15,14 +85,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--color-slate-950);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--color-slate-800);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--color-slate-700);
 }

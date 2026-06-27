@@ -9,7 +9,7 @@ const AdminRoute = ({ children }) => {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-slate-400 font-medium">Authenticating Admin...</p>
+        <p className="mt-4 text-slate-500 font-medium">Authenticating Admin...</p>
       </div>
     );
   }

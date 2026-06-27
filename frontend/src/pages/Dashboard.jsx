@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { FileSpreadsheet, Calendar, IndianRupee, Eye, AlertCircle, Plus, Mail, Phone, MapPin, X } from 'lucide-react';
+import { API_BASE } from '../config';
 import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -13,7 +14,7 @@ const Dashboard = () => {
   // Fetch bookings from backend
   const fetchBookings = async () => {
     try {
-      const res = await fetch('/api/bookings', {
+      const res = await fetch(`${API_BASE}/api/bookings`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -67,7 +68,7 @@ const Dashboard = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 pb-5 border-b border-slate-800">
           <div>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">
+            <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight">
               {user?.role === 'admin' ? 'All System Bookings' : 'My Bookings Dashboard'}
             </h1>
             <p className="text-sm text-slate-400 mt-1">
@@ -98,42 +99,42 @@ const Dashboard = () => {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-center space-x-4">
-            <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+            <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-600">
               <FileSpreadsheet className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Bookings</p>
-              <p className="text-2xl font-bold text-white mt-1">{totalBookings}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Bookings</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">{totalBookings}</p>
             </div>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-center space-x-4">
-            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+            <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-600">
               <IndianRupee className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Amount</p>
-              <p className="text-2xl font-bold text-white mt-1">₹{totalAmount.toLocaleString()}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Amount</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">₹{totalAmount.toLocaleString()}</p>
             </div>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-center space-x-4">
-            <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400">
+            <div className="p-3 bg-cyan-500/10 rounded-xl text-cyan-600">
               <IndianRupee className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Paid</p>
-              <p className="text-2xl font-bold text-white mt-1">₹{totalPaid.toLocaleString()}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Paid</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">₹{totalPaid.toLocaleString()}</p>
             </div>
           </div>
 
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-center space-x-4">
-            <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400">
+            <div className="p-3 bg-rose-500/10 rounded-xl text-rose-600">
               <IndianRupee className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Due</p>
-              <p className="text-2xl font-bold text-white mt-1">₹{totalDue.toLocaleString()}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Due</p>
+              <p className="text-2xl font-bold text-slate-100 mt-1">₹{totalDue.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -142,8 +143,8 @@ const Dashboard = () => {
         {bookings.length === 0 ? (
           <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-12 text-center">
             <Calendar className="w-12 h-12 text-slate-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-white">No Bookings Found</h3>
-            <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
+            <h3 className="text-lg font-semibold text-slate-100">No Bookings Found</h3>
+            <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
               {user?.role === 'admin' 
                 ? 'No employees have registered any bookings in the database yet.' 
                 : 'Get started by creating your very first traveler booking records.'
@@ -178,25 +179,25 @@ const Dashboard = () => {
                   {bookings.map((booking) => (
                     <tr key={booking._id} className="hover:bg-slate-900/25 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Link to={`/booking/${booking.bookingId}`} className="font-bold text-indigo-400 font-mono hover:text-indigo-300 hover:underline">
+                        <Link to={`/booking/${booking.bookingId}`} className="font-bold text-indigo-600 font-mono hover:text-indigo-500 hover:underline">
                           {booking.bookingId}
                         </Link>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col space-y-0.5">
-                          <span className="font-semibold text-white">{booking.travellerName}</span>
-                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <span className="font-semibold text-slate-100">{booking.travellerName}</span>
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
                             <Mail className="w-3 h-3 text-slate-500" /> {booking.travellerEmail}
                           </span>
-                          <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
                             <Phone className="w-3 h-3 text-slate-500" /> {booking.travellerPhone}
                           </span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col space-y-0.5">
-                          <span className="font-medium text-slate-200 flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-indigo-400" /> {booking.packageName}
+                          <span className="font-medium text-slate-100 flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-indigo-600" /> {booking.packageName}
                           </span>
                           <span className="text-xs text-slate-400">{booking.location}</span>
                           <span className="text-xs text-indigo-300 font-mono">
@@ -244,7 +245,7 @@ const Dashboard = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <button
                           onClick={() => setSelectedScreenshot(booking.screenshot)}
-                          className="inline-flex items-center space-x-1 py-1.5 px-3 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/50 text-xs font-semibold transition-all duration-200"
+                          className="inline-flex items-center space-x-1 py-1.5 px-3 rounded-lg bg-slate-850 text-slate-600 hover:bg-slate-800 hover:text-slate-100 border border-slate-800 text-xs font-semibold transition-all duration-200"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>View</span>
@@ -265,17 +266,17 @@ const Dashboard = () => {
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="relative bg-slate-900 border border-slate-800 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl animate-scaleUp">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-              <h3 className="font-bold text-white">Payment Screenshot Verification</h3>
+              <h3 className="font-bold text-slate-100">Payment Screenshot Verification</h3>
               <button
                 onClick={() => setSelectedScreenshot(null)}
-                className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                className="p-1 rounded-lg bg-slate-850 text-slate-500 hover:text-slate-700 hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 flex justify-center bg-slate-950/40 max-h-[70vh] overflow-y-auto">
               <img
-                src={`/${selectedScreenshot}`}
+                src={`${API_BASE}/${selectedScreenshot}`}
                 alt="Payment Transaction Receipt"
                 className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
               />
