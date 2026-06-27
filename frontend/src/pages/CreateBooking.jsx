@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, User, Mail, Phone, MapPin, IndianRupee, Upload, AlertCircle, CheckCircle, FileImage } from 'lucide-react';
+import { API_BASE } from '../config';
 
 const CreateBooking = () => {
   const { token } = useAuth();
@@ -97,7 +98,7 @@ const CreateBooking = () => {
       data.append('transactionId', formData.transactionId);
       data.append('screenshot', screenshot); // File attachment
 
-      const res = await fetch('/api/bookings', {
+      const res = await fetch(`${API_BASE}/api/bookings`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -125,8 +126,8 @@ const CreateBooking = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-3xl font-extrabold text-white">Create New Booking</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="text-3xl font-extrabold text-slate-100">Create New Booking</h1>
+          <p className="text-sm text-slate-500 mt-1">
             Register a travel packages client, capture transaction keys, and record payment screenshots.
           </p>
         </div>
@@ -141,9 +142,9 @@ const CreateBooking = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           
           {/* Traveller Information Section */}
-          <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl">
-            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-              <User className="w-5 h-5 text-indigo-400" />
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+            <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
+              <User className="w-5 h-5 text-indigo-600" />
               <span>Traveller Information</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -210,9 +211,9 @@ const CreateBooking = () => {
           </div>
 
           {/* Trip Details Section */}
-          <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl">
-            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-              <MapPin className="w-5 h-5 text-indigo-400" />
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+            <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
+              <MapPin className="w-5 h-5 text-indigo-600" />
               <span>Trip & Package Details</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -299,9 +300,9 @@ const CreateBooking = () => {
           </div>
 
           {/* Financials & Transaction verification Section */}
-          <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-2xl">
-            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-              <IndianRupee className="w-5 h-5 text-indigo-400" />
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+            <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
+              <IndianRupee className="w-5 h-5 text-indigo-600" />
               <span>Billing & Transaction Verification</span>
             </h2>
             
@@ -412,7 +413,7 @@ const CreateBooking = () => {
             <button
               type="button"
               onClick={() => navigate('/dashboard')}
-              className="py-2.5 px-5 rounded-xl border border-slate-800 text-sm font-semibold text-slate-400 hover:bg-slate-900 hover:text-white transition-colors"
+              className="py-2.5 px-5 rounded-xl border border-slate-800 text-sm font-semibold text-slate-500 bg-slate-900 hover:bg-slate-850 hover:text-slate-100 transition-colors"
             >
               Cancel
             </button>

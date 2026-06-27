@@ -79,21 +79,21 @@ const Register = () => {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-        <h2 className="text-center text-4xl font-extrabold text-white tracking-tight">
+        <h2 className="text-center text-4xl font-extrabold text-slate-100 tracking-tight">
           Create Account
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-400">
+        <p className="mt-2 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-indigo-400 hover:text-indigo-300">
+          <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
             Sign In here
           </Link>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md z-10 px-4 sm:px-0">
-        <div className="bg-slate-900/40 backdrop-blur-md py-8 px-4 border border-slate-800 shadow-2xl rounded-2xl sm:px-10">
+        <div className="bg-slate-900 py-8 px-4 border border-slate-800 shadow-2xl rounded-2xl sm:px-10">
           {error && (
-            <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-start space-x-2 text-sm">
+            <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 rounded-xl flex items-start space-x-2 text-sm">
               <AlertCircle className="w-5 h-5 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -101,7 +101,7 @@ const Register = () => {
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="name" className="block text-sm font-medium text-slate-100">
                 Full Name
               </label>
               <div className="mt-1.5 relative rounded-md shadow-sm">
@@ -115,14 +115,14 @@ const Register = () => {
                   required
                   value={formData.name}
                   onChange={handleChange}
-                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
                   placeholder="John Doe"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-100">
                 Email Address
               </label>
               <div className="mt-1.5 relative rounded-md shadow-sm">
@@ -136,14 +136,14 @@ const Register = () => {
                   required
                   value={formData.email}
                   onChange={handleChange}
-                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
                   placeholder="john@company.com"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="role" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="role" className="block text-sm font-medium text-slate-100">
                 Registration Role
               </label>
               <select
@@ -151,16 +151,16 @@ const Register = () => {
                 name="role"
                 value={formData.role}
                 onChange={handleChange}
-                className="bg-slate-950/60 block w-full mt-1.5 px-3 py-2.5 border border-slate-800 rounded-xl text-slate-350 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                className="bg-slate-950/60 block w-full mt-1.5 px-3 py-2.5 border border-slate-800 rounded-xl text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
               >
-                <option value="employee" className="bg-slate-950 text-slate-300">Employee (Requires Verification)</option>
-                <option value="admin" className="bg-slate-950 text-slate-300">Admin (Requires Secret Code)</option>
+                <option value="employee" className="bg-slate-950 text-slate-100">Employee (Requires Verification)</option>
+                <option value="admin" className="bg-slate-950 text-slate-100">Admin (Requires Secret Code)</option>
               </select>
             </div>
 
             {formData.role === 'admin' && (
               <div className="animate-slideDown">
-                <label htmlFor="adminCode" className="block text-sm font-medium text-slate-300">
+                <label htmlFor="adminCode" className="block text-sm font-medium text-slate-100">
                   Admin Secret Code
                 </label>
                 <div className="mt-1.5 relative rounded-md shadow-sm">
@@ -174,7 +174,7 @@ const Register = () => {
                     required
                     value={formData.adminCode}
                     onChange={handleChange}
-                    className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-indigo-500/50 rounded-xl text-slate-205 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                    className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-indigo-500/50 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
                     placeholder="Enter admin passcode"
                   />
                 </div>
@@ -182,7 +182,7 @@ const Register = () => {
             )}
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-100">
                 Password
               </label>
               <div className="mt-1.5 relative rounded-md shadow-sm">
@@ -196,14 +196,14 @@ const Register = () => {
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-100">
                 Confirm Password
               </label>
               <div className="mt-1.5 relative rounded-md shadow-sm">
@@ -217,7 +217,7 @@ const Register = () => {
                   required
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-202 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
+                  className="bg-slate-950/60 block w-full pl-10 pr-3 py-2.5 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
                   placeholder="••••••••"
                 />
               </div>
