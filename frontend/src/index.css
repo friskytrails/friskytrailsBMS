@@ -96,3 +96,20 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-slate-700);
 }
+
+/* Custom Date Input Calendar Icon color mapping to Frisky Teal (#00A89E) */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(47%) sepia(85%) saturate(1478%) hue-rotate(143deg) brightness(95%) contrast(101%);
+}
+
+/* Prevent Chrome autofill background override and keep theme text colors */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: var(--color-slate-100) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: 0 0 0px 1000px var(--color-slate-950) inset !important;
+}

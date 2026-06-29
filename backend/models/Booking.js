@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const BookingSchema = new mongoose.Schema({
   bookingId: {
     type: String,
+    required: [true, 'Booking ID is required'],
     unique: true,
   },
   startDate: {
@@ -36,11 +37,14 @@ const BookingSchema = new mongoose.Schema({
   },
   dueAmount: {
     type: Number,
+    required: [true, 'Due amount is required'],
+    min: [0, 'Due amount cannot be negative'],
     default: 0,
   },
   transactionId: {
     type: String,
     required: [true, 'Please add a transaction ID'],
+    unique: true,
     trim: true,
   },
   screenshot: {
@@ -66,25 +70,42 @@ const BookingSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a traveler phone number'],
     trim: true,
+    match: [/^[6-9]\d{9}$/, 'Please provide a valid 10-digit Indian phone number starting with 6, 7, 8, or 9'],
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: [true, 'Created by user is required'],
+  },
+  status: {
+    type: String,
+    required: [true, 'Booking status is required'],
+    enum: ['pending', 'confirmed', 'rejected'],
+    default: 'pending',
+  },
+  assignedTo: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    }],
+    default: [],
   },
 }, {
   timestamps: true,
 });
 
-// Auto-generate Booking ID and calculate due amount pre-save
-BookingSchema.pre('save', async function (next) {
+// Auto-generate Booking ID and calculate due amount pre-validation
+BookingSchema.pre('validate', async function (next) {
   // Calculate Due Amount
-  this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
+  if (this.totalAmount !== undefined && this.paidAmount !== undefined) {
+    this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
+  }
 
   // Generate Booking ID if not exists
   if (!this.bookingId) {
     let uniqueIdGenerated = false;
-    while (!uniqueIdGenerated) {
+    let attempts = 0;
+    while (!uniqueIdGenerated && attempts < 10) {
       const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
       const tempId = `BK-${randomPart}`;
       
@@ -94,6 +115,7 @@ BookingSchema.pre('save', async function (next) {
         this.bookingId = tempId;
         uniqueIdGenerated = true;
       }
+      attempts++;
     }
   }
   next();

@@ -93,7 +93,7 @@ const runTests = async () => {
       screenshot: 'uploads/test-screenshot.png',
       travellerName: 'Alice Smith',
       travellerEmail: 'alice.smith@example.com',
-      travellerPhone: '555-0100',
+      travellerPhone: '9876543210',
       createdBy: testEmployeeId,
     });
 
