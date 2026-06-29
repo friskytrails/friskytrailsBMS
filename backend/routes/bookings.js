@@ -27,8 +27,8 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       return res.status(400).json({ success: false, message: 'Please upload a transaction screenshot' });
     }
 
-    // Relative path for frontend to consume (e.g. uploads/filename)
-    const screenshotPath = `uploads/${req.file.filename}`;
+    // Convert file buffer from memory storage to a Base64 data URL
+    const screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
     // Create booking
     const booking = new Booking({

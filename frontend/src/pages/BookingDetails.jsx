@@ -452,7 +452,7 @@ const BookingDetails = () => {
               
               <div className="flex-grow flex items-center justify-center bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden relative min-h-[300px]">
                 <img
-                  src={`${API_BASE}/${booking.screenshot}`}
+                  src={booking.screenshot && booking.screenshot.startsWith('data:') ? booking.screenshot : `${API_BASE}/${booking.screenshot}`}
                   alt="Transaction verification screenshot"
                   className="max-w-full max-h-[45vh] object-contain rounded-lg shadow-inner"
                 />
