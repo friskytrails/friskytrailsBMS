@@ -546,7 +546,7 @@ const AdminDashboard = () => {
             </div>
             <div className="p-6 flex justify-center bg-slate-955 max-h-[70vh] overflow-y-auto">
               <img
-                src={`${API_BASE}/${selectedScreenshot}`}
+                src={selectedScreenshot && selectedScreenshot.startsWith('data:') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
                 alt="Payment Transaction Receipt"
                 className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
               />
