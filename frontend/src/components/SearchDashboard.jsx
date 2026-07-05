@@ -22,6 +22,7 @@ const SearchDashboard = () => {
   // Search parameters state
   const [filters, setFilters] = useState({
     bookingId: '',
+    paymentId: '',
     travellerName: '',
     travellerPhone: '',
     transactionId: '',
@@ -51,6 +52,7 @@ const SearchDashboard = () => {
   const handleReset = () => {
     setFilters({
       bookingId: '',
+      paymentId: '',
       travellerName: '',
       travellerPhone: '',
       transactionId: '',
@@ -138,6 +140,21 @@ const SearchDashboard = () => {
             </div>
           </div>
 
+          {/* Payment ID */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payment ID</label>
+            <div className="relative">
+              <input
+                type="text"
+                name="paymentId"
+                placeholder="PAY-XXXXXX"
+                value={filters.paymentId}
+                onChange={handleInputChange}
+                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
+              />
+            </div>
+          </div>
+
           {/* Traveller Name */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Traveller Name</label>
@@ -154,7 +171,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Phone Number */}
-          <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Phone Number</label>
             <div className="relative">
               <input
@@ -169,7 +186,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Booking Date (createdAt) */}
-          <div className="space-y-1 sm:col-span-1 lg:col-span-1">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date</label>
             <div className="relative">
               <input
@@ -183,7 +200,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Location / Destination */}
-          <div className="space-y-1 sm:col-span-1 lg:col-span-2">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Location / Destination</label>
             <div className="relative">
               <input
@@ -198,7 +215,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Transaction ID */}
-          <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaction ID</label>
             <div className="relative">
               <input
@@ -213,7 +230,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Service Start Date */}
-          <div className="space-y-1 sm:col-span-1 lg:col-span-1">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Service Start Date</label>
             <div className="relative">
               <input
@@ -227,7 +244,7 @@ const SearchDashboard = () => {
           </div>
 
           {/* Service End Date */}
-          <div className="space-y-1 sm:col-span-1 lg:col-span-1">
+          <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Service End Date</label>
             <div className="relative">
               <input
@@ -316,6 +333,7 @@ const SearchDashboard = () => {
               <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Booking ID</th>
+                  <th className="px-6 py-4">Payment ID</th>
                   <th className="px-6 py-4">Booking Date</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Traveller Details</th>
@@ -335,19 +353,31 @@ const SearchDashboard = () => {
                       </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-mono text-xs text-indigo-400 font-bold">
+                        {booking.paymentId || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-xs text-slate-400 flex items-center gap-1">
                         <CalendarDays className="w-3.5 h-3.5 text-indigo-600" />
                         {formatDate(booking.createdAt)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${booking.status === 'confirmed'
+                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
+                        booking.status === 'Booked' || booking.status === 'Confirmed'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : booking.status === 'rejected'
-                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        }`}>
-                        {booking.status}
+                          : booking.status === 'Cancelled'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : booking.status === 'On Hold'
+                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          : booking.status === 'Partial Payment'
+                          ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
+                          : booking.status === 'Payment Done'
+                          ? 'bg-[#00A89E] text-white border-[#00A89E]'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      }`}>
+                        {booking.status || 'Pending'}
                       </span>
                     </td>
                     <td className="px-6 py-4">

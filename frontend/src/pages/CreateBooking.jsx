@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, User, Mail, Phone, MapPin, IndianRupee, Upload, AlertCircle, FileImage } from 'lucide-react';
 import { API_BASE } from '../config';
 
-const CreateBooking = () => {
+const CreateBooking = ({ isEdit }) => {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { bookingId } = useParams();
+
+  const [bookingObjectId, setBookingObjectId] = useState(null);
 
   const [formData, setFormData] = useState({
     travellerName: '',
@@ -20,6 +23,9 @@ const CreateBooking = () => {
     paidAmount: '',
     dueAmount: 0,
     transactionId: '',
+    adults: '',
+    children: '',
+    status: 'Pending',
   });
 
   const [screenshot, setScreenshot] = useState(null);
@@ -40,6 +46,9 @@ const CreateBooking = () => {
     paidAmount: false,
     transactionId: false,
     screenshot: false,
+    adults: false,
+    children: false,
+    status: false,
   });
 
   // Auto-calculate Due Amount whenever Total or Paid changes
@@ -53,6 +62,52 @@ const CreateBooking = () => {
       dueAmount: due,
     }));
   }, [formData.totalAmount, formData.paidAmount]);
+
+  // Fetch details if editing
+  useEffect(() => {
+    if (!isEdit || !bookingId) return;
+    
+    const fetchBookingDetails = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/bookings/${bookingId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        const data = await res.json();
+        if (data.success) {
+          const b = data.data;
+          setBookingObjectId(b._id);
+          setFormData({
+            travellerName: b.travellerName || '',
+            travellerEmail: b.travellerEmail || '',
+            travellerPhone: b.travellerPhone || '',
+            startDate: b.startDate ? new Date(b.startDate).toISOString().split('T')[0] : '',
+            endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
+            packageName: b.packageName || '',
+            location: b.location || '',
+            totalAmount: b.totalAmount || '',
+            paidAmount: b.paidAmount !== undefined ? b.paidAmount : '',
+            dueAmount: b.dueAmount || 0,
+            transactionId: b.transactionId || '',
+            adults: b.adults !== undefined ? b.adults : '',
+            children: b.children !== undefined ? b.children : '',
+            status: b.status || 'Pending',
+          });
+          if (b.screenshot) {
+            setScreenshotName('Existing screenshot kept');
+          }
+        } else {
+          setError(data.message || 'Failed to load booking details for editing');
+        }
+      } catch (err) {
+        console.error('Error fetching booking details:', err);
+        setError('Server connection failed');
+      }
+    };
+    
+    fetchBookingDetails();
+  }, [isEdit, bookingId, token]);
 
   // Validation function
   const validateForm = (data, file) => {
@@ -122,8 +177,27 @@ const CreateBooking = () => {
       tempErrors.transactionId = 'Must be alphanumeric';
     }
     
+    // Adults validation
+    if (data.adults === '' || data.adults === null || data.adults === undefined) {
+      tempErrors.adults = 'Number of adults is required';
+    } else if (parseInt(data.adults) < 0) {
+      tempErrors.adults = 'Number of adults cannot be negative';
+    }
+
+    // Children validation
+    if (data.children === '' || data.children === null || data.children === undefined) {
+      tempErrors.children = 'Number of children is required';
+    } else if (parseInt(data.children) < 0) {
+      tempErrors.children = 'Number of children cannot be negative';
+    }
+
+    // Status validation
+    if (!data.status) {
+      tempErrors.status = 'Status is required';
+    }
+
     // Screenshot validation
-    if (!file) {
+    if (!isEdit && !file) {
       tempErrors.screenshot = 'Screenshot is required';
     }
     
@@ -198,10 +272,21 @@ const CreateBooking = () => {
       data.append('totalAmount', formData.totalAmount);
       data.append('paidAmount', formData.paidAmount || '0');
       data.append('transactionId', formData.transactionId);
-      data.append('screenshot', screenshot);
+      data.append('adults', formData.adults);
+      data.append('children', formData.children);
+      data.append('status', formData.status);
+      
+      if (screenshot) {
+        data.append('screenshot', screenshot);
+      }
 
-      const res = await fetch(`${API_BASE}/api/bookings`, {
-        method: 'POST',
+      const url = isEdit 
+        ? `${API_BASE}/api/bookings/${bookingObjectId}/edit`
+        : `${API_BASE}/api/bookings`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -212,12 +297,12 @@ const CreateBooking = () => {
       setIsSubmitting(false);
 
       if (responseData.success) {
-        navigate('/dashboard');
+        navigate(isEdit ? `/booking/${bookingId}` : '/dashboard');
       } else {
-        setError(responseData.message || 'Failed to create booking');
+        setError(responseData.message || `Failed to ${isEdit ? 'update' : 'create'} booking`);
       }
     } catch (err) {
-      console.error('Error creating booking:', err);
+      console.error(`Error ${isEdit ? 'updating' : 'creating'} booking:`, err);
       setError('Server connection failed');
       setIsSubmitting(false);
     }
@@ -225,7 +310,7 @@ const CreateBooking = () => {
 
   // Get dynamic borders based on error/success/focus state
   const getInputClass = (fieldName, hasIcon = true) => {
-    const base = `bg-slate-950/60 block w-full ${hasIcon ? 'pl-10' : 'px-3'} pr-3 py-2 border rounded-xl text-slate-200 focus:outline-none focus:ring-2 sm:text-sm transition-all duration-200`;
+    const base = `bg-slate-950/60 block w-full ${hasIcon ? 'pl-10' : 'px-3'} pr-3 py-2 border rounded-xl text-slate-200 focus:outline-none focus:ring-2 sm:text-sm transition-all duration-205`;
     const isError = touched[fieldName] && validationErrors[fieldName];
     if (isError) {
       return `${base} border-rose-500/80 focus:ring-rose-500/50 focus:border-rose-500`;
@@ -238,9 +323,11 @@ const CreateBooking = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto font-sans">
         <div className="mb-6">
-          <h1 className="text-3xl font-extrabold text-slate-100">Create New Booking</h1>
+          <h1 className="text-3xl font-extrabold text-slate-100">{isEdit ? 'Edit Booking' : 'Create New Booking'}</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Register a travel packages client, capture transaction keys, and record payment screenshots.
+            {isEdit 
+              ? 'Update booking details, traveler counts, status, and verification files.' 
+              : 'Register a travel packages client, capture transaction keys, and record payment screenshots.'}
           </p>
         </div>
 
@@ -340,6 +427,66 @@ const CreateBooking = () => {
                   <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5" />
                     <span>{validationErrors.travellerPhone}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-800">
+              {/* Adults */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Adults <span className="text-rose-455">*</span>
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-4.5 w-4.5 text-slate-500" />
+                  </div>
+                  <input
+                    type="number"
+                    name="adults"
+                    required
+                    min="0"
+                    value={formData.adults}
+                    onChange={handleInputChange}
+                    onBlur={() => handleBlur('adults')}
+                    className={getInputClass('adults')}
+                    placeholder="2"
+                  />
+                </div>
+                {touched.adults && validationErrors.adults && (
+                  <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{validationErrors.adults}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Children */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Children <span className="text-rose-455">*</span>
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <User className="h-4.5 w-4.5 text-slate-500" />
+                  </div>
+                  <input
+                    type="number"
+                    name="children"
+                    required
+                    min="0"
+                    value={formData.children}
+                    onChange={handleInputChange}
+                    onBlur={() => handleBlur('children')}
+                    className={getInputClass('children')}
+                    placeholder="0"
+                  />
+                </div>
+                {touched.children && validationErrors.children && (
+                  <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{validationErrors.children}</span>
                   </p>
                 )}
               </div>
@@ -554,7 +701,7 @@ const CreateBooking = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Transaction ID */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -578,10 +725,36 @@ const CreateBooking = () => {
                 )}
               </div>
 
+              {/* Status Dropdown */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Booking Status <span className="text-rose-450">*</span>
+                </label>
+                <select
+                  name="status"
+                  required
+                  value={formData.status}
+                  onChange={handleInputChange}
+                  onBlur={() => handleBlur('status')}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors cursor-pointer"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Booked">Booked</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="On Hold">On Hold</option>
+                </select>
+                {touched.status && validationErrors.status && (
+                  <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{validationErrors.status}</span>
+                  </p>
+                )}
+              </div>
+
               {/* Screenshot File Upload */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Screenshot PNG/JPG <span className="text-rose-450">*</span>
+                  Screenshot PNG/JPG {!isEdit && <span className="text-rose-450">*</span>}
                 </label>
                 <div className={`relative border-2 border-dashed rounded-xl p-2.5 flex items-center justify-between transition-colors bg-slate-950/20 ${
                   touched.screenshot && validationErrors.screenshot
@@ -590,7 +763,7 @@ const CreateBooking = () => {
                 }`}>
                   <div className="flex items-center space-x-2">
                     <FileImage className="w-5 h-5 text-slate-500" />
-                    <span className="text-xs text-slate-450 truncate max-w-[200px]">
+                    <span className="text-xs text-slate-450 truncate max-w-[120px]">
                       {screenshotName || 'No file selected'}
                     </span>
                   </div>
@@ -637,7 +810,7 @@ const CreateBooking = () => {
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  <span>Submit Booking</span>
+                  <span>{isEdit ? 'Save Changes' : 'Submit Booking'}</span>
                 </>
               )}
             </button>

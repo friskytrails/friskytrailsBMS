@@ -6,6 +6,11 @@ const BookingSchema = new mongoose.Schema({
     required: [true, 'Booking ID is required'],
     unique: true,
   },
+  paymentId: {
+    type: String,
+    required: [true, 'Payment ID is required'],
+    unique: true,
+  },
   startDate: {
     type: Date,
     required: [true, 'Please add a start date'],
@@ -80,8 +85,8 @@ const BookingSchema = new mongoose.Schema({
   status: {
     type: String,
     required: [true, 'Booking status is required'],
-    enum: ['pending', 'confirmed', 'rejected'],
-    default: 'pending',
+    enum: ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'],
+    default: 'Pending',
   },
   assignedTo: {
     type: [{
@@ -90,6 +95,22 @@ const BookingSchema = new mongoose.Schema({
     }],
     default: [],
   },
+  adults: {
+    type: Number,
+    required: [true, 'Number of adults is required'],
+    min: [0, 'Number of adults cannot be negative'],
+  },
+  children: {
+    type: Number,
+    required: [true, 'Number of children is required'],
+    min: [0, 'Number of children cannot be negative'],
+  },
+  comments: [{
+    sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    senderName: String,
+    message: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
 }, {
   timestamps: true,
 });
@@ -113,6 +134,24 @@ BookingSchema.pre('validate', async function (next) {
       const existingBooking = await mongoose.models.Booking.findOne({ bookingId: tempId });
       if (!existingBooking) {
         this.bookingId = tempId;
+        uniqueIdGenerated = true;
+      }
+      attempts++;
+    }
+  }
+
+  // Generate Payment ID if not exists
+  if (!this.paymentId) {
+    let uniqueIdGenerated = false;
+    let attempts = 0;
+    while (!uniqueIdGenerated && attempts < 10) {
+      const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const tempId = `PAY-${randomPart}`;
+      
+      // Check if it already exists
+      const existingBooking = await mongoose.models.Booking.findOne({ paymentId: tempId });
+      if (!existingBooking) {
+        this.paymentId = tempId;
         uniqueIdGenerated = true;
       }
       attempts++;

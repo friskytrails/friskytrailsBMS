@@ -54,6 +54,14 @@ function App() {
                 }
               />
               <Route
+                path="/booking/:bookingId/edit"
+                element={
+                  <ProtectedRoute>
+                    <CreateBooking isEdit={true} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/booking/:bookingId"
                 element={
                   <ProtectedRoute>

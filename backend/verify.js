@@ -95,6 +95,8 @@ const runTests = async () => {
       travellerEmail: 'alice.smith@example.com',
       travellerPhone: '9876543210',
       createdBy: testEmployeeId,
+      adults: 2,
+      children: 1,
     });
 
     await booking.save();
