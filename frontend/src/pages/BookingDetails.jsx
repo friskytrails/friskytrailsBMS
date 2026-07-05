@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Calendar,
   User,
+  Users,
   Mail,
   Phone,
   MapPin,
@@ -14,9 +15,11 @@ import {
   FileImage,
   ShieldCheck,
   UserPlus,
-  X
+  X,
+  Edit
 } from 'lucide-react';
 import { API_BASE } from '../config';
+import CommentSection from '../components/CommentSection';
 
 const BookingDetails = () => {
   const { bookingId } = useParams();
@@ -26,10 +29,20 @@ const BookingDetails = () => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+
+  // Payment Update state
+  const [isUpdatePaymentOpen, setIsUpdatePaymentOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentTxnId, setPaymentTxnId] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
   // Admin Assignment state
   const [employees, setEmployees] = useState([]);
   const [assigning, setAssigning] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -157,6 +170,96 @@ const BookingDetails = () => {
     }
   };
 
+  const handleStatusChange = async (e) => {
+    const newStatus = e.target.value;
+    if (!newStatus || newStatus === booking.status) return;
+
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+      } else {
+        alert(data.message || 'Failed to update status');
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Failed to update status due to network error.');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handlePaymentUpdateSubmit = async (e) => {
+    e.preventDefault();
+    setPaymentError('');
+
+    if (!paymentAmount) {
+      setPaymentError('Payment amount is required');
+      return;
+    }
+
+    const amtNum = Number(paymentAmount);
+    if (isNaN(amtNum) || amtNum <= 0) {
+      setPaymentError('Payment amount must be a positive number');
+      return;
+    }
+
+    if (amtNum > booking.dueAmount) {
+      setPaymentError(`Payment amount cannot exceed the remaining due amount of ₹${booking.dueAmount}`);
+      return;
+    }
+
+    if (!paymentTxnId.trim()) {
+      setPaymentError('Transaction ID is required');
+      return;
+    }
+
+    setUpdatingPayment(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('amount', paymentAmount);
+      formData.append('transactionId', paymentTxnId.trim());
+      if (paymentScreenshot) {
+        formData.append('screenshot', paymentScreenshot);
+      }
+
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/update-payment`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+      setUpdatingPayment(false);
+
+      if (data.success) {
+        setBooking(data.data);
+        setIsUpdatePaymentOpen(false);
+        setPaymentAmount('');
+        setPaymentTxnId('');
+        setPaymentScreenshot(null);
+      } else {
+        setPaymentError(data.message || 'Failed to update payment');
+      }
+    } catch (err) {
+      console.error('Error updating payment:', err);
+      setPaymentError('Connection error');
+      setUpdatingPayment(false);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -199,6 +302,12 @@ const BookingDetails = () => {
     (emp) => !assignedIds.includes(emp._id.toString())
   );
 
+  // Authorization checks
+  const isCreator = booking?.createdBy && (booking.createdBy._id || booking.createdBy) === user?.id;
+  const isAssigned = booking?.assignedTo && booking.assignedTo.some(emp => (emp._id || emp) === user?.id);
+  const isAdmin = user?.role === 'admin';
+  const canEdit = isAdmin || isCreator || isAssigned;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto animate-fadeIn font-sans">
@@ -225,21 +334,79 @@ const BookingDetails = () => {
                   Booking Reference <span className="font-mono text-indigo-650">{booking.bookingId}</span>
                 </h1>
                 
-                {/* Booking Status Badge */}
-                <span className={`text-xs font-extrabold px-3 py-1 rounded-full border capitalize ${
-                  booking.status === 'confirmed'
-                    ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20'
-                    : booking.status === 'rejected'
-                    ? 'bg-rose-500/10 text-rose-455 border-rose-500/20'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                }`}>
-                  {booking.status || 'pending'}
-                </span>
+                {/* Booking Status Badge / Interactive Dropdown */}
+                {canEdit ? (
+                  <div className="relative flex items-center">
+                    <select
+                      value={booking.status || 'Pending'}
+                      onChange={handleStatusChange}
+                      disabled={updatingStatus}
+                      className={`text-xs font-extrabold px-3 py-1.5 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-955 transition-all ${
+                        booking.status === 'Booked' || booking.status === 'Confirmed'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 focus:border-emerald-500'
+                          : booking.status === 'Cancelled'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 focus:border-rose-500'
+                          : booking.status === 'On Hold'
+                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 focus:border-blue-500'
+                          : booking.status === 'Partial Payment'
+                          ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)] focus:border-[#F39C12]'
+                          : booking.status === 'Payment Done'
+                          ? 'bg-[#00A89E] text-white border-[#00A89E] focus:border-[#00A89E]'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20 focus:border-amber-500'
+                      }`}
+                    >
+                      <option value="Pending" className="bg-slate-900 text-amber-400">Pending</option>
+                      <option value="Booked" className="bg-slate-900 text-emerald-400">Booked</option>
+                      <option value="Confirmed" className="bg-slate-900 text-emerald-400">Confirmed</option>
+                      <option value="Partial Payment" className="bg-slate-900 text-[#F39C12]">Partial Payment</option>
+                      <option value="Payment Done" className="bg-slate-900 text-[#00A89E]">Payment Done</option>
+                      <option value="Cancelled" className="bg-slate-900 text-rose-400">Cancelled</option>
+                      <option value="On Hold" className="bg-slate-900 text-blue-400">On Hold</option>
+                    </select>
+                    {updatingStatus && (
+                      <span className="ml-2 w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+                    )}
+                  </div>
+                ) : (
+                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full border ${
+                    booking.status === 'Booked' || booking.status === 'Confirmed'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : booking.status === 'Cancelled'
+                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      : booking.status === 'On Hold'
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : booking.status === 'Partial Payment'
+                      ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
+                      : booking.status === 'Payment Done'
+                      ? 'bg-[#00A89E] text-white border-[#00A89E]'
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  }`}>
+                    {booking.status || 'Pending'}
+                  </span>
+                )}
               </div>
             </div>
           </div>
           
           <div className="mt-4 sm:mt-0 flex items-center space-x-2">
+            {canEdit && (
+              <button
+                onClick={() => navigate(`/booking/${booking.bookingId}/edit`)}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer transition-colors border border-indigo-500/35"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            )}
+            {canEdit && booking.dueAmount > 0 && (
+              <button
+                onClick={() => setIsUpdatePaymentOpen(true)}
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase bg-[#00A89E] hover:bg-[#008f86] text-white cursor-pointer transition-colors border border-[#00A89E]/35"
+              >
+                <IndianRupee className="w-3.5 h-3.5" />
+                <span>Update Payment</span>
+              </button>
+            )}
             {booking.dueAmount === 0 ? (
               <span className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold uppercase bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
                 Fully Paid
@@ -286,6 +453,27 @@ const BookingDetails = () => {
                     <Phone className="w-4 h-4 text-slate-500" />
                     <span>{booking.travellerPhone}</span>
                   </p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 mt-6 border-t border-slate-800">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Adults</p>
+                    <p className="text-sm font-bold text-slate-100">{booking.adults || 0} Adults</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Children</p>
+                    <p className="text-sm font-bold text-slate-100">{booking.children || 0} Children</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -353,7 +541,11 @@ const BookingDetails = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-800">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Payment ID</p>
+                  <p className="text-sm font-bold text-indigo-650 font-mono mt-1">{booking.paymentId || 'N/A'}</p>
+                </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Payment Reference TXN</p>
                   <p className="text-sm font-bold text-indigo-650 font-mono mt-1">{booking.transactionId}</p>
@@ -362,7 +554,7 @@ const BookingDetails = () => {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Registered Agent</p>
                     <p className="text-sm font-semibold text-slate-100 mt-1">
-                      {booking.createdBy.name} <span className="text-xs text-slate-505 font-normal">({booking.createdBy.email})</span>
+                      {booking.createdBy.name} <span className="text-xs text-slate-500 font-normal font-sans">({booking.createdBy.email})</span>
                     </p>
                   </div>
                 )}
@@ -443,33 +635,190 @@ const BookingDetails = () => {
               </div>
             )}
 
-            {/* Verification Screenshot Receipt */}
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col">
-              <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-                <FileImage className="w-5 h-5 text-indigo-600" />
-                <span>Verification File</span>
-              </h2>
-              
-              <div className="flex-grow flex items-center justify-center bg-slate-950 border border-slate-800 rounded-xl p-4 overflow-hidden relative min-h-[300px]">
-                <img
-                  src={booking.screenshot && booking.screenshot.startsWith('data:') ? booking.screenshot : `${API_BASE}/${booking.screenshot}`}
-                  alt="Transaction verification screenshot"
-                  className="max-w-full max-h-[45vh] object-contain rounded-lg shadow-inner"
-                />
+            {/* Verification Screenshot Mini-Widget */}
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
+                  <FileImage className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100 font-sans">Verification File</h3>
+                  <p className="text-xs text-slate-500">Secure receipt upload</p>
+                </div>
               </div>
-
-              <div className="mt-4 p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-xl flex items-start space-x-2 text-xs">
-                <ShieldCheck className="w-5 h-5 text-indigo-600 flex-shrink-0" />
-                <p className="text-slate-500 leading-normal">
-                  This transaction screenshot was securely uploaded at submission time and populates the audit ledger for financial clearance review.
-                </p>
-              </div>
+              <button
+                onClick={() => setSelectedScreenshot(booking.screenshot)}
+                className="py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors cursor-pointer font-sans"
+              >
+                View Screenshot
+              </button>
             </div>
+
+            {/* Comment Timeline Section */}
+            <CommentSection
+              booking={booking}
+              token={token}
+              onCommentAdded={(updatedBooking) => setBooking(updatedBooking)}
+            />
+
           </div>
 
         </div>
 
       </div>
+
+      {/* Screenshot Modal */}
+      {selectedScreenshot && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="relative bg-slate-900 border border-slate-800 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+              <h3 className="text-base font-bold text-slate-100 font-sans">Verification Screenshot</h3>
+              <button
+                onClick={() => setSelectedScreenshot(null)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 bg-slate-950 flex justify-center items-center overflow-auto max-h-[70vh]">
+              <img
+                src={selectedScreenshot.startsWith('data:') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                alt="Verification Receipt"
+                className="max-w-full max-h-[60vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 text-xs text-slate-500 font-sans">
+              Uploaded at booking time. Keep for audit clearance record.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Payment Modal */}
+      {isUpdatePaymentOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative shadow-2xl animate-scaleUp">
+            <button
+              onClick={() => {
+                setIsUpdatePaymentOpen(false);
+                setPaymentError('');
+                setPaymentAmount('');
+                setPaymentTxnId('');
+                setPaymentScreenshot(null);
+              }}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-xl font-bold text-slate-100 mb-2 flex items-center gap-2">
+              <IndianRupee className="w-5 h-5 text-[#00A89E]" />
+              <span>Update Payment</span>
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">
+              Apply a new payment towards this booking. Status will automatically update to Partial Payment or Payment Done.
+            </p>
+
+            {paymentError && (
+              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{paymentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePaymentUpdateSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  Current Due
+                </label>
+                <div className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-300 text-sm font-semibold">
+                  ₹{booking.dueAmount}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="paymentAmount" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  New Amount Paid (₹) *
+                </label>
+                <input
+                  id="paymentAmount"
+                  type="number"
+                  required
+                  placeholder="e.g. 500"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3.5 py-2 text-slate-100 placeholder-slate-600 text-sm focus:outline-none transition-colors"
+                />
+                {Number(paymentAmount) > 0 && (
+                  <p className="mt-1.5 text-xs text-indigo-400 font-medium">
+                    Remaining Balance after this update: ₹{Math.max(0, booking.dueAmount - Number(paymentAmount))}
+                  </p>
+                )}
+                {Number(paymentAmount) > booking.dueAmount && (
+                  <p className="mt-1 text-xs text-rose-500 font-bold">
+                    Warning: Amount exceeds remaining due amount!
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="paymentTxnId" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  New Transaction ID *
+                </label>
+                <input
+                  id="paymentTxnId"
+                  type="text"
+                  required
+                  placeholder="e.g. TXN98765432"
+                  value={paymentTxnId}
+                  onChange={(e) => setPaymentTxnId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3.5 py-2 text-slate-100 placeholder-slate-600 text-sm focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                  Payment Receipt Screenshot (Optional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/jpg"
+                  onChange={(e) => setPaymentScreenshot(e.target.files[0])}
+                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#00A89E]/10 file:text-[#00A89E] hover:file:bg-[#00A89E]/20 file:cursor-pointer"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUpdatePaymentOpen(false);
+                    setPaymentError('');
+                    setPaymentAmount('');
+                    setPaymentTxnId('');
+                    setPaymentScreenshot(null);
+                  }}
+                  className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-100 rounded-xl text-xs font-bold uppercase transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingPayment || !paymentAmount || !paymentTxnId || Number(paymentAmount) <= 0 || Number(paymentAmount) > booking.dueAmount}
+                  className="px-4 py-2 bg-[#00A89E] hover:bg-[#008f86] text-white disabled:opacity-55 disabled:cursor-not-allowed rounded-xl text-xs font-bold uppercase transition-colors flex items-center gap-1.5"
+                >
+                  {updatingPayment ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <span>Update</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
