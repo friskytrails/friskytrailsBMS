@@ -16,10 +16,36 @@ import {
   ShieldCheck,
   UserPlus,
   X,
-  Edit
+  Edit,
+  Check
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
+
+const getStatusStyles = (status) => {
+  switch (status) {
+    case 'Fulfillment Done':
+    case 'Payment Done':
+    case 'Confirmed':
+      return 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/25';
+    case 'Trip Completed':
+    case 'Booked':
+      return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25';
+    case 'Refund Required':
+    case 'Cancelled':
+      return 'bg-rose-500/10 text-rose-500 border-rose-500/25';
+    case 'Refund Done':
+      return 'bg-blue-500/10 text-blue-500 border-blue-500/25';
+    case 'No Refund':
+    case 'On Hold':
+      return 'bg-slate-500/10 text-slate-400 border-slate-500/25';
+    case 'Partial Payment':
+      return 'bg-orange-500/10 text-orange-500 border-orange-500/25';
+    case 'Pending':
+    default:
+      return 'bg-amber-500/10 text-amber-500 border-amber-500/25';
+  }
+};
 
 const BookingDetails = () => {
   const { bookingId } = useParams();
@@ -31,18 +57,70 @@ const BookingDetails = () => {
   const [error, setError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
-  // Payment Update state
-  const [isUpdatePaymentOpen, setIsUpdatePaymentOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentTxnId, setPaymentTxnId] = useState('');
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
-  const [updatingPayment, setUpdatingPayment] = useState(false);
-  const [paymentError, setPaymentError] = useState('');
+  // Tab State
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // Customer Feedback local state
+  const [feedbackRating, setFeedbackRating] = useState('5');
 
   // Admin Assignment state
   const [employees, setEmployees] = useState([]);
   const [assigning, setAssigning] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // --- Inline Editing States ---
+  const [isEditingPackage, setIsEditingPackage] = useState(false);
+  const [packageFields, setPackageFields] = useState({ packageName: '', location: '' });
+
+  const [isEditingTraveler, setIsEditingTraveler] = useState(false);
+  const [travelerFields, setTravelerFields] = useState({
+    travellerName: '',
+    travellerEmail: '',
+    travellerPhone: '',
+    adults: 0,
+    children: 0,
+  });
+
+  const [isEditingServices, setIsEditingServices] = useState(false);
+  const [servicesFields, setServicesFields] = useState({ startDate: '', endDate: '' });
+
+  // --- Payments Ledger & Modal States ---
+  const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState(null);
+  
+  // Payment Form States
+  const [formAmountPaid, setFormAmountPaid] = useState('');
+  const [formPaymentMode, setFormPaymentMode] = useState('upi');
+  const [formPaymentDate, setFormPaymentDate] = useState('');
+  const [formPaymentFrom, setFormPaymentFrom] = useState('TRAVELER');
+  const [formPaymentTo, setFormPaymentTo] = useState('COMPANY');
+  const [formDetails, setFormDetails] = useState('');
+  const [formAttachment, setFormAttachment] = useState(null);
+  const [formAttachmentName, setFormAttachmentName] = useState('');
+  const [formStatus, setFormStatus] = useState('VERIFICATION-REQUIRED');
+  
+  const [formError, setFormError] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
+  // Payment Table Source Filter State
+  const [paymentSourceFilter, setPaymentSourceFilter] = useState('ALL');
+
+  // Profit Margin State
+  const [profitMarginInput, setProfitMarginInput] = useState(0);
+
+  // --- Full Booking Edit States ---
+  const [isFullEditModalOpen, setIsFullEditModalOpen] = useState(false);
+  const [fullEditName, setFullEditName] = useState('');
+  const [fullEditEmail, setFullEditEmail] = useState('');
+  const [fullEditPhone, setFullEditPhone] = useState('');
+  const [fullEditAdults, setFullEditAdults] = useState(1);
+  const [fullEditChildren, setFullEditChildren] = useState(0);
+  const [fullEditPackageName, setFullEditPackageName] = useState('');
+  const [fullEditLocation, setFullEditLocation] = useState('');
+  const [fullEditStartDate, setFullEditStartDate] = useState('');
+  const [fullEditEndDate, setFullEditEndDate] = useState('');
+  const [fullEditTotalAmount, setFullEditTotalAmount] = useState('');
+
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -55,6 +133,7 @@ const BookingDetails = () => {
         const data = await res.json();
         if (data.success) {
           setBooking(data.data);
+          setProfitMarginInput(data.data.profitMargin || 0);
         } else {
           setError(data.message || 'Booking not found');
         }
@@ -81,7 +160,6 @@ const BookingDetails = () => {
         });
         const data = await res.json();
         if (data.success) {
-          // Filter only verified employees
           const verifiedEmps = data.data.filter(
             (u) => u.role === 'employee' && u.isVerified
           );
@@ -130,7 +208,6 @@ const BookingDetails = () => {
       alert('Failed to assign employee');
     } finally {
       setAssigning(false);
-      // Reset select element index
       e.target.value = '';
     }
   };
@@ -198,75 +275,363 @@ const BookingDetails = () => {
     }
   };
 
-  const handlePaymentUpdateSubmit = async (e) => {
+  // --- Inline Edit Handlers ---
+  const handleSaveBookingFields = async (updatedFields, successCallback) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedFields),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+        if (successCallback) successCallback();
+      } else {
+        alert(data.message || 'Failed to update booking');
+      }
+    } catch (err) {
+      console.error('Error updating booking fields:', err);
+      alert('Failed to save changes due to network connection issues.');
+    }
+  };
+
+  const startEditingPackage = () => {
+    setPackageFields({
+      packageName: booking.packageName,
+      location: booking.location,
+    });
+    setIsEditingPackage(true);
+  };
+
+  const handleSavePackage = () => {
+    handleSaveBookingFields(packageFields, () => setIsEditingPackage(false));
+  };
+
+  const startEditingTraveler = () => {
+    setTravelerFields({
+      travellerName: booking.travellerName,
+      travellerEmail: booking.travellerEmail,
+      travellerPhone: booking.travellerPhone,
+      adults: booking.adults || 0,
+      children: booking.children || 0,
+    });
+    setIsEditingTraveler(true);
+  };
+
+  const handleSaveTraveler = () => {
+    handleSaveBookingFields(travelerFields, () => setIsEditingTraveler(false));
+  };
+
+  const startEditingServices = () => {
+    setServicesFields({
+      startDate: booking.startDate ? new Date(booking.startDate).toISOString().split('T')[0] : '',
+      endDate: booking.endDate ? new Date(booking.endDate).toISOString().split('T')[0] : '',
+    });
+    setIsEditingServices(true);
+  };
+
+  const handleSaveServices = () => {
+    handleSaveBookingFields(servicesFields, () => setIsEditingServices(false));
+  };
+
+  // --- Full Booking Edit Handlers ---
+  const openFullEditModal = () => {
+    setFullEditName(booking.travellerName || '');
+    setFullEditEmail(booking.travellerEmail || '');
+    setFullEditPhone(booking.travellerPhone || '');
+    setFullEditAdults(booking.adults || 1);
+    setFullEditChildren(booking.children || 0);
+    setFullEditPackageName(booking.packageName || '');
+    setFullEditLocation(booking.location || '');
+    setFullEditStartDate(booking.startDate ? new Date(booking.startDate).toISOString().split('T')[0] : '');
+    setFullEditEndDate(booking.endDate ? new Date(booking.endDate).toISOString().split('T')[0] : '');
+    setFullEditTotalAmount(booking.totalAmount || '');
+    setFormError('');
+    setIsFullEditModalOpen(true);
+  };
+
+  const handleFullEditSubmit = async (e) => {
     e.preventDefault();
-    setPaymentError('');
+    setSubmittingPayment(true);
+    setFormError('');
 
-    if (!paymentAmount) {
-      setPaymentError('Payment amount is required');
+    if (
+      !fullEditName.trim() ||
+      !fullEditEmail.trim() ||
+      !fullEditPhone.trim() ||
+      !fullEditPackageName.trim() ||
+      !fullEditLocation.trim() ||
+      !fullEditStartDate ||
+      !fullEditEndDate ||
+      !fullEditTotalAmount
+    ) {
+      setFormError('All fields are required.');
+      setSubmittingPayment(false);
       return;
     }
 
-    const amtNum = Number(paymentAmount);
-    if (isNaN(amtNum) || amtNum <= 0) {
-      setPaymentError('Payment amount must be a positive number');
+    const payload = {
+      travellerName: fullEditName.trim(),
+      travellerEmail: fullEditEmail.trim(),
+      travellerPhone: fullEditPhone.trim(),
+      adults: Number(fullEditAdults),
+      children: Number(fullEditChildren),
+      packageName: fullEditPackageName.trim(),
+      location: fullEditLocation.trim(),
+      startDate: fullEditStartDate,
+      endDate: fullEditEndDate,
+      totalAmount: Number(fullEditTotalAmount),
+    };
+
+    await handleSaveBookingFields(payload, () => {
+      setIsFullEditModalOpen(false);
+    });
+    setSubmittingPayment(false);
+  };
+
+
+  // --- Payment Form Submit Handlers ---
+  const openAddPaymentModal = () => {
+    setEditingPayment(null);
+    setFormAmountPaid('');
+    setFormPaymentMode('upi');
+    setFormPaymentDate(new Date().toISOString().split('T')[0]);
+    setFormPaymentFrom('TRAVELER');
+    setFormPaymentTo('COMPANY');
+    setFormDetails('');
+    setFormAttachment(null);
+    setFormAttachmentName('');
+    setFormStatus('VERIFICATION-REQUIRED');
+    setFormError('');
+    setIsAddPaymentModalOpen(true);
+  };
+
+  const openEditPayment = (payment) => {
+    setEditingPayment(payment);
+    setFormAmountPaid(payment.amountPaid.toString());
+    setFormPaymentMode(payment.paymentMode);
+    setFormPaymentDate(payment.paymentDate ? new Date(payment.paymentDate).toISOString().split('T')[0] : '');
+    setFormPaymentFrom(payment.paymentFrom);
+    setFormPaymentTo(payment.paymentTo);
+    setFormDetails(payment.details || '');
+    setFormAttachment(null);
+    setFormAttachmentName(payment.attachmentName || '');
+    setFormStatus(payment.status || 'VERIFICATION-REQUIRED');
+    setFormError('');
+    setIsAddPaymentModalOpen(true);
+  };
+
+  const handlePaymentFormSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!formAmountPaid) {
+      setFormError('Amount Paid is required');
+      return;
+    }
+    const amt = Number(formAmountPaid);
+    if (isNaN(amt) || amt <= 0) {
+      setFormError('Amount Paid must be positive');
       return;
     }
 
-    if (amtNum > booking.dueAmount) {
-      setPaymentError(`Payment amount cannot exceed the remaining due amount of ₹${booking.dueAmount}`);
+    if (!formPaymentDate) {
+      setFormError('Payment Date is required');
       return;
     }
 
-    if (!paymentTxnId.trim()) {
-      setPaymentError('Transaction ID is required');
+    if (!formDetails.trim()) {
+      setFormError('Transaction Details are required');
       return;
     }
 
-    setUpdatingPayment(true);
+    setSubmittingPayment(true);
 
     try {
       const formData = new FormData();
-      formData.append('amount', paymentAmount);
-      formData.append('transactionId', paymentTxnId.trim());
-      if (paymentScreenshot) {
-        formData.append('screenshot', paymentScreenshot);
+      formData.append('amount', formAmountPaid);
+      formData.append('amountPaid', formAmountPaid);
+      formData.append('transactionId', formDetails.trim());
+      formData.append('details', formDetails.trim());
+      formData.append('paymentDate', formPaymentDate);
+      formData.append('paymentFrom', formPaymentFrom);
+      formData.append('paymentTo', formPaymentTo);
+      formData.append('paymentMode', formPaymentMode);
+      formData.append('attachmentName', formAttachmentName);
+      formData.append('status', formStatus);
+
+      if (formAttachment) {
+        formData.append('screenshot', formAttachment);
       }
 
-      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/update-payment`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      let res;
+      if (editingPayment) {
+        res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit-payment/${editingPayment.paymentId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData
+        });
+      } else {
+        res = await fetch(`${API_BASE}/api/bookings/${booking._id}/update-payment`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          body: formData
+        });
+      }
 
       const data = await res.json();
-      setUpdatingPayment(false);
+      setSubmittingPayment(false);
 
       if (data.success) {
         setBooking(data.data);
-        setIsUpdatePaymentOpen(false);
-        setPaymentAmount('');
-        setPaymentTxnId('');
-        setPaymentScreenshot(null);
+        setIsAddPaymentModalOpen(false);
       } else {
-        setPaymentError(data.message || 'Failed to update payment');
+        setFormError(data.message || 'Failed to submit payment details');
       }
     } catch (err) {
-      console.error('Error updating payment:', err);
-      setPaymentError('Connection error');
-      setUpdatingPayment(false);
+      console.error('Error submitting payment form:', err);
+      setFormError('Connection issue.');
+      setSubmittingPayment(false);
     }
+  };
+
+  const handleSendReceipt = async (paymentId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/verify-payment/${paymentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'send-receipt' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Receipt successfully queued and emailed!');
+        setBooking(data.data);
+      } else {
+        alert(data.message || 'Failed to send receipt');
+      }
+    } catch (err) {
+      console.error('Send receipt error:', err);
+      alert('Network error while sending receipt');
+    }
+  };
+
+  const handleProfitMarginSave = async (val) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ profitMargin: Number(val) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+      }
+    } catch (err) {
+      console.error('Error saving profit margin:', err);
+    }
+  };
+
+  const getFilteredPayments = () => {
+    if (!booking || !booking.payments) return [];
+    if (paymentSourceFilter === 'ALL') return booking.payments;
+    return booking.payments.filter((p) => p.paymentFrom === paymentSourceFilter);
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
-      month: 'long',
+      month: 'short',
       day: 'numeric',
     });
+  };
+
+  const calculateDaysRemaining = (startDate) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const diffTime = start - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  // Construct Activity Logs dynamically
+  const getActivityLog = () => {
+    if (!booking) return [];
+    const logs = [];
+
+    logs.push({
+      id: 'created',
+      taskName: 'Booking Created',
+      updatedBy: booking.createdBy?.name || 'Auto',
+      timestamp: booking.createdAt,
+      completed: true,
+    });
+
+    logs.push({
+      id: 'initial-payment',
+      taskName: 'Initial Payment Submitted',
+      updatedBy: booking.createdBy?.name || 'Auto',
+      timestamp: booking.createdAt,
+      completed: true,
+    });
+
+    const hasMilestones = ['Booked', 'Confirmed', 'Payment Done', 'Partial Payment'].includes(booking.status);
+    logs.push({
+      id: 'mail-sent',
+      taskName: 'Mail Confirmation Sent',
+      updatedBy: 'System / Auto',
+      timestamp: booking.updatedAt || booking.createdAt,
+      completed: hasMilestones,
+    });
+
+    logs.push({
+      id: 'whatsapp-sent',
+      taskName: 'WhatsApp Details Shared',
+      updatedBy: 'System / Auto',
+      timestamp: booking.updatedAt || booking.createdAt,
+      completed: hasMilestones,
+    });
+
+    if (booking.comments) {
+      booking.comments.forEach((comment) => {
+        const isSystem = comment.senderName && comment.senderName.startsWith('System');
+        if (isSystem) {
+          const parts = comment.senderName.split('/');
+          const updatedBy = parts[1] ? parts[1].trim() : 'Auto';
+          
+          let taskLabel = comment.message;
+          if (comment.message.includes('Payment Updated')) {
+            taskLabel = 'Payment Updated';
+          }
+          
+          logs.push({
+            id: comment._id,
+            taskName: taskLabel,
+            updatedBy: `System / ${updatedBy}`,
+            timestamp: comment.timestamp,
+            completed: true,
+          });
+        }
+      });
+    }
+
+    return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   };
 
   if (loading) {
@@ -296,372 +661,953 @@ const BookingDetails = () => {
     );
   }
 
-  // Filter unassigned employees for dropdown selection list
-  const assignedIds = booking.assignedTo?.map((u) => (u._id || u).toString()) || [];
-  const unassignedEmployees = employees.filter(
-    (emp) => !assignedIds.includes(emp._id.toString())
-  );
-
-  // Authorization checks
   const isCreator = booking?.createdBy && (booking.createdBy._id || booking.createdBy) === user?.id;
   const isAssigned = booking?.assignedTo && booking.assignedTo.some(emp => (emp._id || emp) === user?.id);
   const isAdmin = user?.role === 'admin';
   const canEdit = isAdmin || isCreator || isAssigned;
 
+  const assignedIds = booking.assignedTo?.map((u) => (u._id || u).toString()) || [];
+  const unassignedEmployees = employees.filter(
+    (emp) => !assignedIds.includes(emp._id.toString())
+  );
+
+  const totalAmount = booking.totalAmount || 0;
+  const paidAmount = booking.paidAmount || 0;
+  const dueAmount = booking.dueAmount || 0;
+  const paidPercent = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 105) > 100 ? 100 : Math.round((paidAmount / totalAmount) * 100) : 0;
+  const duePercent = totalAmount > 0 ? 100 - paidPercent : 0;
+  const daysDiff = calculateDaysRemaining(booking.startDate);
+
+  // Tabs structure
+  const tabs = [
+    { id: 'overview', name: 'BOOKING OVERVIEW' },
+    { id: 'traveler', name: 'TRAVELER DETAILS' },
+    { id: 'payments', name: 'PAYMENTS & RECEIPTS' },
+    { id: 'services', name: 'BOOKING SERVICES' },
+    { id: 'comments', name: 'COMMENTS & UPDATES' },
+    { id: 'documents', name: 'DOCUMENTS' }
+  ];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto animate-fadeIn font-sans">
+      <div className="max-w-7xl mx-auto animate-fadeIn font-sans space-y-8">
         
-        {/* Header & Back Action */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 pb-6 border-b border-slate-800">
-          <div className="flex items-center space-x-3">
+        {/* 1. Header & Primary Info Bar */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-slate-800">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => navigate('/dashboard')}
-              className="p-2 rounded-xl bg-slate-900 hover:bg-slate-855 text-slate-400 hover:text-slate-100 border border-slate-800 transition-colors cursor-pointer"
+              className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-400 hover:text-slate-100 border border-slate-800 transition-colors cursor-pointer animate-pulse"
               title="Back to Dashboard"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-6 h-6" />
             </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-0.5 rounded-full">
-                  Record File
-                </span>
-                <span className="text-xs text-slate-500 font-mono">ID: {booking._id}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 mt-1.5">
-                <h1 className="text-3xl font-extrabold text-slate-100">
-                  Booking Reference <span className="font-mono text-indigo-650">{booking.bookingId}</span>
-                </h1>
-                
-                {/* Booking Status Badge / Interactive Dropdown */}
-                {canEdit ? (
-                  <div className="relative flex items-center">
-                    <select
-                      value={booking.status || 'Pending'}
-                      onChange={handleStatusChange}
-                      disabled={updatingStatus}
-                      className={`text-xs font-extrabold px-3 py-1.5 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-955 transition-all ${
-                        booking.status === 'Booked' || booking.status === 'Confirmed'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 focus:border-emerald-500'
-                          : booking.status === 'Cancelled'
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20 focus:border-rose-500'
-                          : booking.status === 'On Hold'
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 focus:border-blue-500'
-                          : booking.status === 'Partial Payment'
-                          ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)] focus:border-[#F39C12]'
-                          : booking.status === 'Payment Done'
-                          ? 'bg-[#00A89E] text-white border-[#00A89E] focus:border-[#00A89E]'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20 focus:border-amber-500'
-                      }`}
-                    >
-                      <option value="Pending" className="bg-slate-900 text-amber-400">Pending</option>
-                      <option value="Booked" className="bg-slate-900 text-emerald-400">Booked</option>
-                      <option value="Confirmed" className="bg-slate-900 text-emerald-400">Confirmed</option>
-                      <option value="Partial Payment" className="bg-slate-900 text-[#F39C12]">Partial Payment</option>
-                      <option value="Payment Done" className="bg-slate-900 text-[#00A89E]">Payment Done</option>
-                      <option value="Cancelled" className="bg-slate-900 text-rose-400">Cancelled</option>
-                      <option value="On Hold" className="bg-slate-900 text-blue-400">On Hold</option>
-                    </select>
-                    {updatingStatus && (
-                      <span className="ml-2 w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+            <div className="flex items-center gap-3.5 flex-wrap">
+              {/* Left: Booking ID in a white badge */}
+              <span className="bg-slate-900 text-slate-100 px-4 py-2 rounded-lg font-mono font-extrabold text-sm md:text-base shadow-sm border border-slate-800">
+                {booking.bookingId}
+              </span>
+              
+              {/* Center: Booking Status Dropdown */}
+              {canEdit ? (
+                <div className="relative flex items-center">
+                  <select
+                    value={booking.status || 'Pending'}
+                    onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
+                    disabled={updatingStatus}
+                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${
+                      getStatusStyles(booking.status)
+                    }`}
+                  >
+                    <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                    <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
+                    <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
+                    <option value="No Refund" className="bg-slate-900 text-slate-400">No Refund</option>
+                    <option value="Refund Required" className="bg-slate-900 text-rose-500">Refund Required</option>
+                    <option value="Refund Done" className="bg-slate-900 text-blue-500">Refund Done</option>
+                    {!['Pending', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'].includes(booking.status) && booking.status && (
+                      <option value={booking.status} className="bg-slate-900 text-slate-400">{booking.status} (Legacy)</option>
                     )}
-                  </div>
-                ) : (
-                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full border ${
-                    booking.status === 'Booked' || booking.status === 'Confirmed'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      : booking.status === 'Cancelled'
-                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                      : booking.status === 'On Hold'
-                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                      : booking.status === 'Partial Payment'
-                      ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
-                      : booking.status === 'Payment Done'
-                      ? 'bg-[#00A89E] text-white border-[#00A89E]'
-                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  }`}>
-                    {booking.status || 'Pending'}
-                  </span>
-                )}
-              </div>
+                  </select>
+                  {updatingStatus && (
+                    <span className="ml-2 w-4 h-4 border-2 border-[#00A89E] border-t-transparent rounded-full animate-spin"></span>
+                  )}
+                </div>
+              ) : (
+                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${
+                  getStatusStyles(booking.status)
+                }`}>
+                  {booking.status}
+                </span>
+              )}
             </div>
           </div>
-          
-          <div className="mt-4 sm:mt-0 flex items-center space-x-2">
+
+          <div className="flex items-center gap-3 flex-wrap md:justify-end">
             {canEdit && (
               <button
-                onClick={() => navigate(`/booking/${booking.bookingId}/edit`)}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer transition-colors border border-indigo-500/35"
+                onClick={openFullEditModal}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs md:text-sm font-extrabold uppercase rounded-lg shadow transition-colors cursor-pointer"
               >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Edit</span>
+                <Edit className="w-4 h-4" />
+                <span>Edit Booking</span>
               </button>
             )}
-            {canEdit && booking.dueAmount > 0 && (
-              <button
-                onClick={() => setIsUpdatePaymentOpen(true)}
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase bg-[#00A89E] hover:bg-[#008f86] text-white cursor-pointer transition-colors border border-[#00A89E]/35"
-              >
-                <IndianRupee className="w-3.5 h-3.5" />
-                <span>Update Payment</span>
-              </button>
-            )}
-            {booking.dueAmount === 0 ? (
-              <span className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold uppercase bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                Fully Paid
-              </span>
-            ) : booking.paidAmount > 0 ? (
-              <span className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold uppercase bg-amber-500/10 border border-amber-500/20 text-amber-400">
-                Partial Payment
-              </span>
-            ) : (
-              <span className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold uppercase bg-rose-500/10 border border-rose-500/20 text-rose-400">
-                Unpaid
-              </span>
-            )}
+
+            {/* Right: Service Date Badge */}
+            <span className="bg-slate-900 text-slate-300 border border-slate-800 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-500" />
+              <span>{formatDate(booking.startDate)} — {formatDate(booking.endDate)}</span>
+            </span>
+          </div>
+
+        </div>
+
+        {/* Secondary Info Bar (Horizontal) */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Traveller Name</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
+              {booking.travellerName}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Travellers</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+              {booking.adults || 0} Adult{booking.adults !== 1 && 's'} + {booking.children || 0} Child{booking.children !== 1 && 'ren'}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Package Cost</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+              ₹{totalAmount.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Paid Amount</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+              ₹{paidAmount.toLocaleString()}
+            </div>
           </div>
         </div>
 
-        {/* Content Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Tabbed Navigation System */}
+        <div className="flex overflow-x-auto border-b border-slate-850 gap-3 scrollbar-none pb-px">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`whitespace-nowrap px-5 py-4 text-xs md:text-sm font-extrabold tracking-wider border-b-2 transition-all duration-150 cursor-pointer ${
+                  isActive
+                    ? 'border-[#00A89E] text-[#00A89E]'
+                    : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-800'
+                }`}
+              >
+                {tab.name}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab Content Display */}
+        <div className="mt-6">
           
-          {/* Details Column */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* Traveller Details Card */}
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-                <User className="w-5 h-5 text-indigo-600" />
-                <span>Traveller Details</span>
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Full Name</p>
-                  <p className="text-sm font-semibold text-slate-100">{booking.travellerName}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Email Address</p>
-                  <p className="text-sm font-medium text-slate-100 flex items-center gap-1.5 mt-0.5 font-mono text-xs">
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span>{booking.travellerEmail}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Phone Number</p>
-                  <p className="text-sm font-medium text-slate-100 flex items-center gap-1.5 mt-0.5">
-                    <Phone className="w-4 h-4 text-slate-500" />
-                    <span>{booking.travellerPhone}</span>
-                  </p>
-                </div>
-              </div>
+          {/* TAB 1: BOOKING OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 mt-6 border-t border-slate-800">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
-                    <User className="w-5 h-5" />
+              {/* Column 1: Package Details Card */}
+              <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Package Details</h3>
+                  
+                  {/* Separate Edit Toggle for Package */}
+                  <div className="flex items-center gap-2">
+                    {isEditingPackage ? (
+                      <>
+                        <button
+                          onClick={handleSavePackage}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setIsEditingPackage(false)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      canEdit && (
+                        <button
+                          onClick={startEditingPackage}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                      )
+                    )}
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Adults</p>
-                    <p className="text-sm font-bold text-slate-100">{booking.adults || 0} Adults</p>
-                  </div>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-400">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Children</p>
-                    <p className="text-sm font-bold text-slate-100">{booking.children || 0} Children</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Trip Details Card */}
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-                <MapPin className="w-5 h-5 text-indigo-600" />
-                <span>Trip & Package Info</span>
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Package Selected</p>
-                  <p className="text-sm font-semibold text-slate-100 flex items-center gap-1.5 mt-0.5">
-                    <FileText className="w-4 h-4 text-indigo-600" />
-                    <span>{booking.packageName}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Destination Location</p>
-                  <p className="text-sm font-medium text-slate-100 flex items-center gap-1.5 mt-0.5">
-                    <MapPin className="w-4 h-4 text-slate-500" />
-                    <span>{booking.location}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Departure Date</p>
-                  <p className="text-sm font-medium text-indigo-650 flex items-center gap-1.5 mt-0.5">
-                    <Calendar className="w-4 h-4 text-slate-550" />
-                    <span>{formatDate(booking.startDate)}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Return Date</p>
-                  <p className="text-sm font-medium text-indigo-650 flex items-center gap-1.5 mt-0.5">
-                    <Calendar className="w-4 h-4 text-slate-550" />
-                    <span>{formatDate(booking.endDate)}</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Billing Card */}
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
-                <IndianRupee className="w-5 h-5 text-indigo-600" />
-                <span>Financial Ledger</span>
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Total Package Value</p>
-                  <p className="text-xl font-bold text-slate-100 mt-1">₹{booking.totalAmount?.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Paid Confirmed</p>
-                  <p className="text-xl font-bold text-emerald-605 mt-1">₹{booking.paidAmount?.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Outstanding Balance</p>
-                  <p className={`text-xl font-bold mt-1 ${booking.dueAmount > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
-                    ₹{booking.dueAmount?.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-800">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Payment ID</p>
-                  <p className="text-sm font-bold text-indigo-650 font-mono mt-1">{booking.paymentId || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Payment Reference TXN</p>
-                  <p className="text-sm font-bold text-indigo-650 font-mono mt-1">{booking.transactionId}</p>
-                </div>
-                {booking.createdBy && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Registered Agent</p>
-                    <p className="text-sm font-semibold text-slate-100 mt-1">
-                      {booking.createdBy.name} <span className="text-xs text-slate-500 font-normal font-sans">({booking.createdBy.email})</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right Column: Screenshot & Admin Allocation */}
-          <div className="space-y-6">
-            
-            {/* Admin Assignment Widget */}
-            {user?.role === 'admin' && (
-              <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-lg space-y-4">
-                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-2">
-                  <UserPlus className="w-5 h-5 text-indigo-600" />
-                  <span>Assign Employees</span>
-                </h2>
                 
-                {/* Loading state indicator */}
-                {assigning && (
-                  <div className="flex items-center space-x-2 text-xs text-indigo-600 font-semibold bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-2.5">
-                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                    <span>Saving Assignment...</span>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Package Name</label>
+                    {isEditingPackage ? (
+                      <input
+                        type="text"
+                        value={packageFields.packageName}
+                        onChange={(e) => setPackageFields({ ...packageFields, packageName: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
+                      />
+                    ) : (
+                      <div className="bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+                        {booking.packageName}
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div>
+                    <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Destination Location</label>
+                    {isEditingPackage ? (
+                      <input
+                        type="text"
+                        value={packageFields.location}
+                        onChange={(e) => setPackageFields({ ...packageFields, location: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
+                      />
+                    ) : (
+                      <div className="bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+                        {booking.location}
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Booked On</label>
+                      <div className="text-xs md:text-sm text-slate-300 font-semibold font-mono">
+                        {new Date(booking.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Booked Method</label>
+                      <div className="text-xs md:text-sm text-indigo-400 font-extrabold">
+                        {dueAmount === 0 ? 'Full Payment' : 'Partial Payment'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                {/* Assigned Employees List */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Team Members</label>
+                {/* Assigned To Section */}
+                <div className="pt-4 border-t border-slate-800 space-y-4">
+                  <label className="text-xs md:text-sm font-extrabold text-slate-400 uppercase tracking-wider block">Assigned Team Members</label>
+                  
                   {!booking.assignedTo || booking.assignedTo.length === 0 ? (
-                    <p className="text-xs text-slate-500 italic bg-slate-950 border border-slate-800 p-3 rounded-xl">
+                    <p className="text-xs md:text-sm text-slate-500 italic bg-slate-950 border border-slate-800/60 p-3 rounded-lg">
                       No employees assigned to see/manage this booking.
                     </p>
                   ) : (
-                    <div className="flex flex-wrap gap-2 p-2 bg-slate-955 border border-slate-800 rounded-xl max-h-[150px] overflow-y-auto">
+                    <div className="flex flex-wrap gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-xl max-h-[140px] overflow-y-auto">
                       {booking.assignedTo.map((emp) => (
                         <div
                           key={emp._id}
-                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-semibold"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-xs font-bold"
                         >
                           <span>{emp.name}</span>
-                          <button
-                            onClick={() => handleRemoveEmployee(emp._id)}
-                            disabled={assigning}
-                            className="p-0.5 rounded-full hover:bg-indigo-550/20 hover:text-indigo-300 transition-colors cursor-pointer"
-                            title="Remove assignment"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          {user?.role === 'admin' && (
+                            <button
+                              onClick={() => handleRemoveEmployee(emp._id)}
+                              disabled={assigning}
+                              className="p-0.5 rounded hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors cursor-pointer"
+                              title="Remove assignment"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {user?.role === 'admin' && (
+                    <div className="space-y-2">
+                      <select
+                        onChange={handleAddEmployee}
+                        disabled={assigning || unassignedEmployees.length === 0}
+                        defaultValue=""
+                        className="w-full px-3 py-2.5 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-xs md:text-sm text-slate-300 font-semibold focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <option value="" disabled>
+                          {unassignedEmployees.length === 0
+                            ? 'All verified employees assigned'
+                            : 'Select employee to assign...'}
+                        </option>
+                        {unassignedEmployees.map((emp) => (
+                          <option key={emp._id} value={emp._id}>
+                            {emp.name} ({emp.email})
+                          </option>
+                        ))}
+                      </select>
+                      {assigning && (
+                        <span className="text-xs text-indigo-500 animate-pulse block">Saving Assignment...</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 2: Service Date & Feedback Card */}
+              <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6 flex flex-col justify-between">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Service Date & Schedule</h3>
+                    
+                    {/* Inline Edit Trigger for Dates */}
+                    <div className="flex items-center gap-2">
+                      {isEditingServices ? (
+                        <>
+                          <button
+                            onClick={handleSaveServices}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setIsEditingServices(false)}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        canEdit && (
+                          <button
+                            onClick={startEditingServices}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Service Date Input Box */}
+                  {isEditingServices ? (
+                    <div className="space-y-4 bg-slate-950 p-4 border border-slate-800 rounded-xl">
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Departure Date</label>
+                        <input
+                          type="date"
+                          value={servicesFields.startDate}
+                          onChange={(e) => setServicesFields({ ...servicesFields, startDate: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Return Date</label>
+                        <input
+                          type="date"
+                          value={servicesFields.endDate}
+                          onChange={(e) => setServicesFields({ ...servicesFields, endDate: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none transition-colors"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 p-5 rounded-xl flex flex-col gap-2 shadow-inner">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-rose-500" />
+                        <span className="font-extrabold text-xs md:text-sm uppercase tracking-wider text-rose-400">Scheduled Service Date</span>
+                      </div>
+                      <div className="text-sm md:text-base font-extrabold text-slate-100 mt-1">
+                        {formatDate(booking.startDate)} — {formatDate(booking.endDate)}
+                      </div>
+                      
+                      {/* Days Remaining Logic */}
+                      <div className="text-xl md:text-2xl font-extrabold mt-1 text-rose-500">
+                        {daysDiff > 0 ? `-${daysDiff} days remaining` : daysDiff === 0 ? 'Starts today' : `${Math.abs(daysDiff)} days ago`}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Select dropdown list */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add Team Member</label>
+                {/* Customer Feedback rating dropdown */}
+                <div className="space-y-2 pt-4 border-t border-slate-800">
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block">Customer Feedback</label>
                   <select
-                    onChange={handleAddEmployee}
-                    disabled={assigning || unassignedEmployees.length === 0}
-                    defaultValue=""
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-350 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                    value={feedbackRating}
+                    onChange={(e) => setFeedbackRating(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-xs md:text-sm text-slate-205 font-bold focus:outline-none transition-colors cursor-pointer"
                   >
-                    <option value="" disabled>
-                      {unassignedEmployees.length === 0
-                        ? 'All verified employees assigned'
-                        : 'Select employee to assign...'}
-                    </option>
-                    {unassignedEmployees.map((emp) => (
-                      <option key={emp._id} value={emp._id}>
-                        {emp.name} ({emp.email})
-                      </option>
-                    ))}
+                    <option value="5">⭐⭐⭐⭐⭐ (5 Stars - Excellent)</option>
+                    <option value="4">⭐⭐⭐⭐ (4 Stars - Very Good)</option>
+                    <option value="3">⭐⭐⭐ (3 Stars - Good)</option>
+                    <option value="2">⭐⭐ (2 Stars - Fair)</option>
+                    <option value="1">⭐ (1 Star - Poor)</option>
                   </select>
                 </div>
               </div>
-            )}
 
-            {/* Verification Screenshot Mini-Widget */}
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2.5 bg-indigo-500/10 rounded-xl text-indigo-400">
-                  <FileImage className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-100 font-sans">Verification File</h3>
-                  <p className="text-xs text-slate-500">Secure receipt upload</p>
+              {/* Column 3: Financials & Status Table */}
+              <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6 lg:col-span-1 flex flex-col justify-between">
+                <div className="space-y-6 w-full">
+                  <div className="border-b border-slate-800 pb-3">
+                    <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Financials & Activity Log</h3>
+                  </div>
+
+                  {/* Financial 3-Mini Cards Top Row */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow-inner">
+                      <span className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider">Total</span>
+                      <span className="text-xs md:text-sm font-extrabold text-slate-300 mt-1.5 font-mono">₹{totalAmount.toLocaleString()}</span>
+                    </div>
+                    
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-3.5 rounded-lg flex flex-col justify-between relative shadow-inner">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] md:text-xs font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Paid</span>
+                        <span className="text-[9px] bg-blue-600 text-white font-extrabold px-1.5 py-0.5 rounded-full">{paidPercent}%</span>
+                      </div>
+                      <span className="text-xs md:text-sm font-extrabold text-blue-600 dark:text-blue-300 mt-1.5 font-mono">₹{paidAmount.toLocaleString()}</span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-lg border flex flex-col justify-between relative shadow-inner ${dueAmount === 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] md:text-xs font-extrabold uppercase tracking-wider ${dueAmount === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>Due</span>
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${dueAmount === 0 ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>{duePercent}%</span>
+                      </div>
+                      <span className={`text-xs md:text-sm font-extrabold mt-1.5 font-mono ${dueAmount === 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>₹{dueAmount.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Status Table (Activity Log) - Expanded size & padding */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
+                    <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+                      <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">System Activity Audit Log</span>
+                      <span className="text-[10px] font-mono text-slate-500">Live Status</span>
+                    </div>
+                    
+                    <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-850">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-850 text-[10px] md:text-xs uppercase font-extrabold text-slate-500 bg-slate-900/50">
+                            <th className="py-2.5 px-4 w-10">OK</th>
+                            <th className="py-2.5 px-3">Task Name</th>
+                            <th className="py-2.5 px-3 text-right">By</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850/30">
+                          {getActivityLog().map((log) => (
+                            <tr key={log.id} className="text-xs text-slate-300 hover:bg-slate-900/60 transition-colors">
+                              <td className="py-3.5 px-4">
+                                {log.completed ? (
+                                  <Check className="w-4 h-4 text-[#00A89E] stroke-[2.5]" />
+                                ) : (
+                                  <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-950 flex items-center justify-center">
+                                    <span className="w-2 h-2 rounded-full bg-slate-850 animate-pulse"></span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3.5 px-3 font-semibold text-slate-205 max-w-[150px] truncate" title={log.taskName}>
+                                {log.taskName}
+                              </td>
+                              <td className="py-3.5 px-3 text-right font-mono text-[10px] text-slate-400">
+                                {log.updatedBy.replace('System / ', '')}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedScreenshot(booking.screenshot)}
-                className="py-1.5 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors cursor-pointer font-sans"
-              >
-                View Screenshot
-              </button>
+
             </div>
+          )}
 
-            {/* Comment Timeline Section */}
-            <CommentSection
-              booking={booking}
-              token={token}
-              onCommentAdded={(updatedBooking) => setBooking(updatedBooking)}
-            />
+          {/* TAB 2: TRAVELER DETAILS */}
+          {activeTab === 'traveler' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Traveller Information</h3>
+                
+                {/* Localized Edit Trigger for Traveler Info */}
+                <div className="flex items-center gap-2">
+                  {isEditingTraveler ? (
+                    <>
+                      <button
+                        onClick={handleSaveTraveler}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingTraveler(false)}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    canEdit && (
+                      <button
+                        onClick={startEditingTraveler}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Full Name</label>
+                  {isEditingTraveler ? (
+                    <input
+                      type="text"
+                      value={travelerFields.travellerName}
+                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerName: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
+                    />
+                  ) : (
+                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
+                      {booking.travellerName}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Email Address</label>
+                  {isEditingTraveler ? (
+                    <input
+                      type="email"
+                      value={travelerFields.travellerEmail}
+                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerEmail: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
+                    />
+                  ) : (
+                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-1.5 font-mono shadow-inner">
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <span>{booking.travellerEmail}</span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Phone Number</label>
+                  {isEditingTraveler ? (
+                    <input
+                      type="text"
+                      value={travelerFields.travellerPhone}
+                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerPhone: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
+                    />
+                  ) : (
+                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-1.5 shadow-inner">
+                      <Phone className="w-4 h-4 text-slate-500" />
+                      <span>{booking.travellerPhone}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          </div>
+              {/* Adults & Children Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-850">
+                <div className="flex items-center space-x-4 bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-inner">
+                  <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div className="flex-grow">
+                    <p className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-0.5">Adults</p>
+                    {isEditingTraveler ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={travelerFields.adults}
+                        onChange={(e) => setTravelerFields({ ...travelerFields, adults: Number(e.target.value) })}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3 py-1 text-slate-100 text-sm focus:outline-none"
+                      />
+                    ) : (
+                      <p className="text-sm md:text-base font-bold text-slate-100">{booking.adults || 0} Adults</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4 bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-inner">
+                  <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div className="flex-grow">
+                    <p className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-0.5">Children</p>
+                    {isEditingTraveler ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={travelerFields.children}
+                        onChange={(e) => setTravelerFields({ ...travelerFields, children: Number(e.target.value) })}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3 py-1 text-slate-100 text-sm focus:outline-none"
+                      />
+                    ) : (
+                      <p className="text-sm md:text-base font-bold text-slate-100">{booking.children || 0} Children</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: PAYMENTS & RECEIPTS (Replicating exact layout of Screenshot 2) */}
+          {activeTab === 'payments' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
+              {/* Header section with add manual payment button & profit margin input */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={openAddPaymentModal}
+                    className="px-4 py-2 bg-[#E65F00] hover:bg-[#c25000] text-white text-xs font-bold uppercase rounded shadow transition-colors cursor-pointer"
+                  >
+                    ADD MANUAL PAYMENT
+                  </button>
+                </div>
+
+                {/* Profit Margin controls */}
+                <div className="flex items-center gap-2 bg-slate-900 p-2 border border-slate-800 rounded-lg">
+                  <span className="text-xs font-extrabold text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
+                    Profit Margin: {booking.profitMargin || 0}
+                  </span>
+                  <span className="text-slate-400 text-xs font-bold">→</span>
+                  <input
+                    type="number"
+                    value={profitMarginInput}
+                    onChange={(e) => setProfitMarginInput(e.target.value)}
+                    onBlur={() => handleProfitMarginSave(profitMarginInput)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleProfitMarginSave(profitMarginInput);
+                    }}
+                    placeholder="Profit Margin"
+                    className="w-20 bg-slate-950 border border-slate-800 focus:border-[#00A89E] rounded-md px-2 py-1 text-xs text-slate-100 focus:outline-none"
+                    title="Press Enter or click outside to save"
+                  />
+                </div>
+              </div>
+
+              {/* Title & Filter pills: ALL, TRAVELER, COMPANY */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-205">Payments related to Traveler</h3>
+                  <div className="flex items-center gap-2.5 mt-2">
+                    <span className="text-xs font-extrabold text-slate-400 uppercase">From</span>
+                    <button
+                      onClick={() => setPaymentSourceFilter('ALL')}
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
+                        paymentSourceFilter === 'ALL'
+                          ? 'bg-[#E65F00] text-white border-[#E65F00]'
+                          : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
+                      }`}
+                    >
+                      ALL
+                    </button>
+                    <button
+                      onClick={() => setPaymentSourceFilter('TRAVELER')}
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
+                        paymentSourceFilter === 'TRAVELER'
+                          ? 'bg-[#E65F00] text-white border-[#E65F00]'
+                          : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
+                      }`}
+                    >
+                      TRAVELER
+                    </button>
+                    <button
+                      onClick={() => setPaymentSourceFilter('COMPANY')}
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
+                        paymentSourceFilter === 'COMPANY'
+                          ? 'bg-[#E65F00] text-white border-[#E65F00]'
+                          : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
+                      }`}
+                    >
+                      COMPANY
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ledger Transactions Table */}
+                <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto shadow-inner">
+                  <table className="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                      <tr className="border-b border-slate-850 text-xs uppercase font-extrabold text-slate-500 bg-slate-900">
+                        <th className="py-3 px-4">ID</th>
+                        <th className="py-3 px-3">Payment Date</th>
+                        <th className="py-3 px-3">Payment From</th>
+                        <th className="py-3 px-3">Payment To</th>
+                        <th className="py-3 px-3">Amount Paid</th>
+                        <th className="py-3 px-3">Mode of Payment</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3 text-center">Send Receipt</th>
+                        <th className="py-3 px-3">Added By</th>
+                        <th className="py-3 px-3">Attachment</th>
+                        <th className="py-3 px-3">Details</th>
+                        <th className="py-3 px-3 text-center">Verified</th>
+                        <th className="py-3 px-4 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850">
+                      {getFilteredPayments().length === 0 ? (
+                        <tr>
+                          <td colSpan="13" className="py-8 text-center text-slate-500 italic">
+                            No payment records found.
+                          </td>
+                        </tr>
+                      ) : (
+                        getFilteredPayments().map((p) => (
+                          <tr key={p._id || p.paymentId} className="text-xs text-slate-300 hover:bg-slate-900/40 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-slate-400">{p.paymentId}</td>
+                            <td className="py-3.5 px-3 font-semibold">{formatDate(p.paymentDate)}</td>
+                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom}</td>
+                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentTo}</td>
+                            <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{p.amountPaid.toLocaleString()}</td>
+                            <td className="py-3.5 px-3 font-semibold text-indigo-500">{p.paymentMode}</td>
+                            <td className="py-3.5 px-3">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                                p.status === 'PAID'
+                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
+                                  : p.status === 'DISAPPROVED'
+                                  ? 'bg-rose-500/10 text-rose-500 border-rose-500/25'
+                                  : 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-3 text-center">
+                              <button
+                                onClick={() => handleSendReceipt(p.paymentId)}
+                                className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+                              >
+                                SEND
+                              </button>
+                            </td>
+                            <td className="py-3.5 px-3 font-semibold text-slate-400">{p.addedBy}</td>
+                            <td className="py-3.5 px-3">
+                              {p.attachment ? (
+                                <button
+                                  onClick={() => setSelectedScreenshot(p.attachment)}
+                                  className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+                                >
+                                  OPEN
+                                </button>
+                              ) : (
+                                <span className="text-slate-600">None</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-3 font-mono text-[11px] max-w-[150px] truncate" title={p.details}>
+                              {p.details}
+                            </td>
+                            <td className="py-3.5 px-3 text-center">
+                              {p.verified ? (
+                                <Check className="w-4 h-4 text-emerald-400 mx-auto stroke-[2.5]" />
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4 text-center">
+                              {canEdit && (
+                                <button
+                                  onClick={() => openEditPayment(p)}
+                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                >
+                                  EDIT
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Bottom placeholder: Payments related to Service */}
+                <div className="pt-6 border-t border-slate-850">
+                  <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider">Payments related to Service</h3>
+                  <p className="text-xs text-slate-600 italic mt-1">No services payments recorded.</p>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 4: BOOKING SERVICES */}
+          {activeTab === 'services' && (
+            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Package & Booking Services</h3>
+                
+                {/* Localized Edit Trigger for Dates under Services */}
+                <div className="flex items-center gap-2">
+                  {isEditingServices ? (
+                    <>
+                      <button
+                        onClick={handleSaveServices}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingServices(false)}
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    canEdit && (
+                      <button
+                        onClick={startEditingServices}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-755 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Package Name</label>
+                  <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-2 shadow-inner">
+                    <FileText className="w-5 h-5 text-indigo-650" />
+                    <span>{booking.packageName}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Destination Location</label>
+                  <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-2 shadow-inner">
+                    <MapPin className="w-5 h-5 text-slate-500" />
+                    <span>{booking.location}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-5 border-t border-slate-850">
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Departure Date</p>
+                  {isEditingServices ? (
+                    <input
+                      type="date"
+                      value={servicesFields.startDate}
+                      onChange={(e) => setServicesFields({ ...servicesFields, startDate: e.target.value })}
+                      className="bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2 text-slate-100 text-sm focus:outline-none"
+                    />
+                  ) : (
+                    <p className="text-sm md:text-base font-bold text-indigo-500 flex items-center gap-2 mt-0.5">
+                      <Calendar className="w-5 h-5 text-slate-500" />
+                      <span>{formatDate(booking.startDate)}</span>
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Return Date</p>
+                  {isEditingServices ? (
+                    <input
+                      type="date"
+                      value={servicesFields.endDate}
+                      onChange={(e) => setServicesFields({ ...servicesFields, endDate: e.target.value })}
+                      className="bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2 text-slate-100 text-sm focus:outline-none"
+                    />
+                  ) : (
+                    <p className="text-sm md:text-base font-bold text-indigo-500 flex items-center gap-2 mt-0.5">
+                      <Calendar className="w-5 h-5 text-slate-500" />
+                      <span>{formatDate(booking.endDate)}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: COMMENTS & UPDATES */}
+          {activeTab === 'comments' && (
+            <div className="h-full min-h-[480px]">
+              <CommentSection
+                booking={booking}
+                token={token}
+                onCommentAdded={(updatedBooking) => setBooking(updatedBooking)}
+              />
+            </div>
+          )}
+
+          {/* TAB 6: DOCUMENTS */}
+          {activeTab === 'documents' && (() => {
+            const docs = [];
+            if (booking.screenshot) {
+              docs.push({
+                type: 'Initial Booking Screenshot',
+                src: booking.screenshot,
+                info: 'Uploaded during booking registration.',
+                date: booking.createdAt,
+                name: 'screenshot.jpg'
+              });
+            }
+            if (booking.payments && booking.payments.length > 0) {
+              booking.payments.forEach((payment, idx) => {
+                if (payment.attachment) {
+                  docs.push({
+                    type: `Payment Receipt (₹${payment.amountPaid.toLocaleString()})`,
+                    src: payment.attachment,
+                    info: `Mode: ${payment.paymentMode.toUpperCase()} | Txn ID: ${payment.details || 'N/A'} | Status: ${payment.status}`,
+                    date: payment.paymentDate,
+                    name: payment.attachmentName || `payment_receipt_${idx + 1}.jpg`
+                  });
+                }
+              });
+            }
+
+            return (
+              <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
+                <div className="border-b border-slate-800 pb-3">
+                  <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Uploaded Verification Documents</h3>
+                </div>
+
+                {docs.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {docs.map((doc, idx) => (
+                      <div key={idx} className="bg-slate-950 p-4 border border-slate-800 rounded-xl shadow-inner flex flex-col justify-between space-y-3">
+                        <div className="relative group overflow-hidden rounded-lg bg-slate-900 border border-slate-800 flex justify-center items-center h-[260px]">
+                          <img
+                            src={doc.src.startsWith('data:') ? doc.src : `${API_BASE}/${doc.src}`}
+                            alt={doc.type}
+                            className="max-w-full max-h-full object-contain rounded transition-transform duration-300 group-hover:scale-[1.03] cursor-pointer"
+                            onClick={() => setSelectedScreenshot(doc.src)}
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between items-start">
+                            <h4 className="text-sm font-extrabold text-slate-200">{doc.type}</h4>
+                            <span className="text-[10px] text-slate-500 font-bold">{formatDate(doc.date)}</span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">{doc.info}</p>
+                          {doc.name && (
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">File: {doc.name}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-slate-500">
+                    <FileImage className="w-12 h-12 mx-auto opacity-30 mb-2" />
+                    <p className="text-sm">No verification screenshot or payment receipt uploaded for this booking.</p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         </div>
 
@@ -694,127 +1640,394 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* Update Payment Modal */}
-      {isUpdatePaymentOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 relative shadow-2xl animate-scaleUp">
+      {/* 2. Manual Payment Entry Modal (Replicating exact layout of Screenshot 1) */}
+      {isAddPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-lg max-w-md w-full p-6 relative shadow-2xl animate-scaleUp">
+            
+            {/* Close Button */}
             <button
-              onClick={() => {
-                setIsUpdatePaymentOpen(false);
-                setPaymentError('');
-                setPaymentAmount('');
-                setPaymentTxnId('');
-                setPaymentScreenshot(null);
-              }}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-100 transition-colors"
+              onClick={() => setIsAddPaymentModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-205 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-xl font-bold text-slate-100 mb-2 flex items-center gap-2">
-              <IndianRupee className="w-5 h-5 text-[#00A89E]" />
-              <span>Update Payment</span>
+            {/* Modal Title */}
+            <h3 className="text-lg font-bold text-slate-200 text-center mb-6 border-b border-slate-800 pb-2">
+              {editingPayment ? 'Edit Payment Entry' : 'Manual Payment Entry'}
             </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Apply a new payment towards this booking. Status will automatically update to Partial Payment or Payment Done.
-            </p>
 
-            {paymentError && (
-              <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs rounded-xl flex items-center gap-2">
+            {formError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{paymentError}</span>
+                <span>{formError}</span>
               </div>
             )}
 
-            <form onSubmit={handlePaymentUpdateSubmit} className="space-y-4">
+            <form onSubmit={handlePaymentFormSubmit} className="space-y-4">
+              
+              {/* Amount Paid * */}
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                  Current Due
-                </label>
-                <div className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-300 text-sm font-semibold">
-                  ₹{booking.dueAmount}
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="paymentAmount" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                  New Amount Paid (₹) *
-                </label>
                 <input
-                  id="paymentAmount"
                   type="number"
                   required
-                  placeholder="e.g. 500"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3.5 py-2 text-slate-100 placeholder-slate-600 text-sm focus:outline-none transition-colors"
+                  disabled={!!editingPayment}
+                  placeholder="Amount Paid *"
+                  value={formAmountPaid}
+                  onChange={(e) => setFormAmountPaid(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors disabled:bg-slate-900 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
-                {Number(paymentAmount) > 0 && (
-                  <p className="mt-1.5 text-xs text-indigo-400 font-medium">
-                    Remaining Balance after this update: ₹{Math.max(0, booking.dueAmount - Number(paymentAmount))}
-                  </p>
-                )}
-                {Number(paymentAmount) > booking.dueAmount && (
-                  <p className="mt-1 text-xs text-rose-500 font-bold">
-                    Warning: Amount exceeds remaining due amount!
-                  </p>
-                )}
               </div>
 
+              {/* Payment Mode */}
               <div>
-                <label htmlFor="paymentTxnId" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                  New Transaction ID *
+                <select
+                  value={formPaymentMode}
+                  onChange={(e) => setFormPaymentMode(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none transition-colors"
+                >
+                  <option value="" disabled>Payment Mode</option>
+                  <option value="upi">upi</option>
+                  <option value="cash">cash</option>
+                  <option value="bank transfer">bank transfer</option>
+                  <option value="credit card">credit card</option>
+                  <option value="wallet">wallet</option>
+                </select>
+              </div>
+
+              {/* Payment Date * */}
+              <div className="relative">
+                <label className="absolute -top-2 left-2.5 bg-slate-900 px-1 text-[10px] text-slate-550 font-semibold">
+                  Payment Date *
                 </label>
                 <input
-                  id="paymentTxnId"
-                  type="text"
+                  type="date"
                   required
-                  placeholder="e.g. TXN98765432"
-                  value={paymentTxnId}
-                  onChange={(e) => setPaymentTxnId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3.5 py-2 text-slate-100 placeholder-slate-600 text-sm focus:outline-none transition-colors"
+                  value={formPaymentDate}
+                  onChange={(e) => setFormPaymentDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                  Payment Receipt Screenshot (Optional)
+              {/* Payment from */}
+              <div className="relative">
+                <label className="absolute -top-2 left-2.5 bg-slate-900 px-1 text-[10px] text-slate-550 font-semibold">
+                  Payment from
                 </label>
+                <select
+                  value={formPaymentFrom}
+                  onChange={(e) => setFormPaymentFrom(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none transition-colors"
+                >
+                  <option value="TRAVELER">TRAVELER</option>
+                  <option value="COMPANY">COMPANY</option>
+                </select>
+              </div>
+
+              {/* Payment To */}
+              <div className="relative">
+                <label className="absolute -top-2 left-2.5 bg-slate-900 px-1 text-[10px] text-slate-550 font-semibold">
+                  Payment To
+                </label>
+                <select
+                  value={formPaymentTo}
+                  onChange={(e) => setFormPaymentTo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none transition-colors"
+                >
+                  <option value="COMPANY">COMPANY</option>
+                  <option value="TRAVELER">TRAVELER</option>
+                </select>
+              </div>
+
+              {/* Transaction Details (with character counter) * */}
+              <div>
+                <input
+                  type="text"
+                  required
+                  maxLength={200}
+                  placeholder={`Transaction Details (${formDetails.length}/200) *`}
+                  value={formDetails}
+                  onChange={(e) => setFormDetails(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                />
+              </div>
+
+              {/* Attachment block */}
+              <div className="border border-slate-800 rounded p-3 bg-slate-950/50">
+                <span className="text-[10px] text-slate-500 font-semibold block mb-1">Attachment</span>
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/jpg"
-                  onChange={(e) => setPaymentScreenshot(e.target.files[0])}
-                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#00A89E]/10 file:text-[#00A89E] hover:file:bg-[#00A89E]/20 file:cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    setFormAttachment(file);
+                    if (file) setFormAttachmentName(file.name);
+                  }}
+                  className="w-full text-xs text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded file:border file:border-slate-800 file:text-xs file:font-semibold file:bg-slate-900 file:text-slate-300 hover:file:bg-slate-800 file:cursor-pointer"
+                />
+                <input
+                  type="text"
+                  placeholder="Enter File name"
+                  value={formAttachmentName}
+                  onChange={(e) => setFormAttachmentName(e.target.value)}
+                  className="w-full mt-2 bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-slate-100 text-xs focus:outline-none"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              {/* If editing, allow changing transaction status */}
+              {editingPayment && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Transaction Status
+                  </label>
+                  <select
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none"
+                  >
+                    <option value="VERIFICATION-REQUIRED">VERIFICATION-REQUIRED</option>
+                    <option value="PAID">PAID</option>
+                    <option value="DISAPPROVED">DISAPPROVED</option>
+                  </select>
+                </div>
+              )}
+
+              {/* SUBMIT Button (Solid red) */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={submittingPayment}
+                  className="w-full py-3 bg-[#d32f2f] hover:bg-[#b71c1c] text-white font-extrabold uppercase rounded shadow transition-colors text-sm cursor-pointer disabled:opacity-50"
+                >
+                  {submittingPayment ? 'SUBMITTING...' : 'SUBMIT'}
+                </button>
+              </div>
+
+              {/* Bottom option: Payment By Wallet */}
+              <div className="pt-2 border-t text-center">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsUpdatePaymentOpen(false);
-                    setPaymentError('');
-                    setPaymentAmount('');
-                    setPaymentTxnId('');
-                    setPaymentScreenshot(null);
-                  }}
-                  className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-100 rounded-xl text-xs font-bold uppercase transition-colors"
+                  onClick={() => alert('Mock: Payment by Wallet selected')}
+                  className="text-xs text-slate-500 hover:text-slate-300 font-bold transition-colors uppercase cursor-pointer"
+                >
+                  Payment By Wallet
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- Full Booking Edit Modal --- */}
+      {isFullEditModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-lg max-w-2xl w-full p-6 relative shadow-2xl animate-scaleUp">
+            
+            {/* Close Button */}
+            <button
+              onClick={() => setIsFullEditModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-205 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Modal Title */}
+            <h3 className="text-lg font-bold text-slate-200 text-center mb-6 border-b border-slate-800 pb-2">
+              Full Booking Edit
+            </h3>
+
+            {formError && (
+              <div className="mb-4 p-3 bg-red-50/10 border border-red-500/20 text-red-500 text-xs rounded flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleFullEditSubmit} className="space-y-6">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Column 1: Traveler Details */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-extrabold text-[#00A89E] uppercase tracking-wider border-b border-slate-800 pb-1">
+                    Traveler Details
+                  </h4>
+                  
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Traveller Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Traveller Name"
+                      value={fullEditName}
+                      onChange={(e) => setFullEditName(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Traveller Email
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="Traveller Email"
+                      value={fullEditEmail}
+                      onChange={(e) => setFullEditEmail(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Traveller Phone
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Traveller Phone"
+                      value={fullEditPhone}
+                      onChange={(e) => setFullEditPhone(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                        Adults
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={fullEditAdults}
+                        onChange={(e) => setFullEditAdults(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                        Children
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={fullEditChildren}
+                        onChange={(e) => setFullEditChildren(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Column 2: Package & Services Details */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-extrabold text-[#00A89E] uppercase tracking-wider border-b border-slate-800 pb-1">
+                    Package & Schedule Details
+                  </h4>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Package Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Package Name"
+                      value={fullEditPackageName}
+                      onChange={(e) => setFullEditPackageName(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Destination Location
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Destination Location"
+                      value={fullEditLocation}
+                      onChange={(e) => setFullEditLocation(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                        Start Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={fullEditStartDate}
+                        onChange={(e) => setFullEditStartDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3 py-1.5 text-slate-100 text-xs focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                        End Date
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={fullEditEndDate}
+                        onChange={(e) => setFullEditEndDate(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3 py-1.5 text-slate-100 text-xs focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Package Cost (Total Amount) *
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="Package Cost"
+                      value={fullEditTotalAmount}
+                      onChange={(e) => setFullEditTotalAmount(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsFullEditModalOpen(false)}
+                  className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-205 rounded text-xs font-bold uppercase transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={updatingPayment || !paymentAmount || !paymentTxnId || Number(paymentAmount) <= 0 || Number(paymentAmount) > booking.dueAmount}
-                  className="px-4 py-2 bg-[#00A89E] hover:bg-[#008f86] text-white disabled:opacity-55 disabled:cursor-not-allowed rounded-xl text-xs font-bold uppercase transition-colors flex items-center gap-1.5"
+                  disabled={submittingPayment}
+                  className="px-6 py-2 bg-[#d32f2f] hover:bg-[#b71c1c] text-white font-extrabold uppercase rounded shadow transition-colors text-xs cursor-pointer disabled:opacity-50"
                 >
-                  {updatingPayment ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <span>Update</span>
-                  )}
+                  {submittingPayment ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
+
             </form>
+
           </div>
         </div>
       )}
@@ -822,5 +2035,6 @@ const BookingDetails = () => {
     </div>
   );
 };
+
 
 export default BookingDetails;

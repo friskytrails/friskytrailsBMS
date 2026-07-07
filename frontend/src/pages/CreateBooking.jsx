@@ -192,7 +192,7 @@ const CreateBooking = ({ isEdit }) => {
     }
 
     // Status validation
-    if (!data.status) {
+    if (isEdit && !data.status) {
       tempErrors.status = 'Status is required';
     }
 
@@ -701,7 +701,7 @@ const CreateBooking = ({ isEdit }) => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 ${isEdit ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
               {/* Transaction ID */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -726,30 +726,32 @@ const CreateBooking = ({ isEdit }) => {
               </div>
 
               {/* Status Dropdown */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Booking Status <span className="text-rose-450">*</span>
-                </label>
-                <select
-                  name="status"
-                  required
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  onBlur={() => handleBlur('status')}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors cursor-pointer"
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Booked">Booked</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="On Hold">On Hold</option>
-                </select>
-                {touched.status && validationErrors.status && (
-                  <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>{validationErrors.status}</span>
-                  </p>
-                )}
-              </div>
+              {isEdit && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                    Booking Status <span className="text-rose-450">*</span>
+                  </label>
+                  <select
+                    name="status"
+                    required
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    onBlur={() => handleBlur('status')}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Booked">Booked</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="On Hold">On Hold</option>
+                  </select>
+                  {touched.status && validationErrors.status && (
+                    <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>{validationErrors.status}</span>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Screenshot File Upload */}
               <div>
