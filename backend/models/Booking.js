@@ -1,5 +1,65 @@
 const mongoose = require('mongoose');
 
+const PaymentSchema = new mongoose.Schema({
+  paymentId: {
+    type: String,
+    required: true,
+  },
+  paymentDate: {
+    type: Date,
+    required: true,
+    default: Date.now,
+  },
+  paymentFrom: {
+    type: String,
+    required: true,
+    enum: ['TRAVELER', 'COMPANY'],
+    default: 'TRAVELER',
+  },
+  paymentTo: {
+    type: String,
+    required: true,
+    enum: ['TRAVELER', 'COMPANY'],
+    default: 'COMPANY',
+  },
+  amountPaid: {
+    type: Number,
+    required: true,
+    min: [0, 'Amount paid cannot be negative'],
+  },
+  paymentMode: {
+    type: String,
+    required: true,
+  },
+  status: {
+    type: String,
+    required: true,
+    enum: ['PAID', 'VERIFICATION-REQUIRED', 'DISAPPROVED'],
+    default: 'VERIFICATION-REQUIRED',
+  },
+  addedBy: {
+    type: String,
+    required: true,
+  },
+  attachment: {
+    type: String, // Base64 data url or path
+  },
+  attachmentName: {
+    type: String,
+  },
+  details: {
+    type: String,
+    trim: true,
+  },
+  verified: {
+    type: Boolean,
+    default: false,
+  },
+  invoiceNumber: {
+    type: String,
+  }
+}, { timestamps: true });
+
 const BookingSchema = new mongoose.Schema({
   bookingId: {
     type: String,
@@ -85,7 +145,10 @@ const BookingSchema = new mongoose.Schema({
   status: {
     type: String,
     required: [true, 'Booking status is required'],
-    enum: ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'],
+    enum: [
+      'Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done',
+      'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'
+    ],
     default: 'Pending',
   },
   assignedTo: {
@@ -111,9 +174,58 @@ const BookingSchema = new mongoose.Schema({
     message: String,
     timestamp: { type: Date, default: Date.now }
   }],
+  payments: {
+    type: [PaymentSchema],
+    default: [],
+  },
+  profitMargin: {
+    type: Number,
+    default: 0,
+  }
 }, {
   timestamps: true,
 });
+
+function ensureInitialPayment(doc) {
+  if (!doc.paidAmount || doc.paidAmount <= 0) return;
+  
+  if (!doc.payments) {
+    doc.payments = [];
+  }
+
+  // Find if initial payment exists
+  const hasInitial = doc.payments.some(p => 
+    p.invoiceNumber === `INV-${doc.bookingId}` || 
+    p.details === 'Initial Booking Payment' ||
+    p.addedBy === 'System Migrator'
+  );
+
+  if (!hasInitial) {
+    // Sum of other payments
+    const otherSum = doc.payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    const initialAmount = doc.paidAmount - otherSum;
+    
+    if (initialAmount > 0) {
+      const isPaid = doc.status === 'Payment Done' || doc.status === 'Confirmed';
+      const initialPayment = {
+        paymentId: doc.paymentId || `PAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        paymentDate: doc.createdAt || new Date(),
+        paymentFrom: 'TRAVELER',
+        paymentTo: 'COMPANY',
+        amountPaid: initialAmount,
+        paymentMode: 'upi',
+        status: isPaid ? 'PAID' : 'VERIFICATION-REQUIRED',
+        addedBy: 'System Migrator',
+        attachment: doc.screenshot,
+        attachmentName: 'screenshot.jpg',
+        details: doc.transactionId || 'Initial Booking Payment',
+        verified: isPaid,
+        invoiceNumber: `INV-${doc.bookingId}`
+      };
+      doc.payments.unshift(initialPayment);
+    }
+  }
+}
 
 // Auto-generate Booking ID and calculate due amount pre-validation
 BookingSchema.pre('validate', async function (next) {
@@ -157,7 +269,15 @@ BookingSchema.pre('validate', async function (next) {
       attempts++;
     }
   }
+
+  ensureInitialPayment(this);
+
   next();
+});
+
+// Dynamic migration post document load/initialization from database
+BookingSchema.post('init', function (doc) {
+  ensureInitialPayment(doc);
 });
 
 module.exports = mongoose.model('Booking', BookingSchema);

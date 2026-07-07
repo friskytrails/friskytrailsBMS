@@ -59,6 +59,23 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       children: Number(children),
     });
 
+    // Populate initial payment details with creator agent name
+    booking.payments = [{
+      paymentId: `${100000 + Math.floor(Math.random() * 900000)}`,
+      paymentDate: new Date(),
+      paymentFrom: 'TRAVELER',
+      paymentTo: 'COMPANY',
+      amountPaid: Number(paidAmount),
+      paymentMode: 'upi',
+      status: 'VERIFICATION-REQUIRED',
+      addedBy: req.user.name || 'Agent',
+      attachment: screenshotPath,
+      attachmentName: 'screenshot.jpg',
+      details: transactionId,
+      verified: false,
+      invoiceNumber: `INV-${booking.bookingId}`
+    }];
+
     await booking.save();
 
     res.status(201).json({
@@ -307,7 +324,7 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update this booking status.' });
     }
 
-    if (!['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'].includes(status)) {
+    if (!['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
@@ -450,6 +467,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       adults,
       children,
       status,
+      profitMargin,
     } = req.body;
 
     if (startDate) booking.startDate = startDate;
@@ -466,6 +484,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
     if (adults !== undefined) booking.adults = Number(adults);
     if (children !== undefined) booking.children = Number(children);
     if (status) booking.status = status;
+    if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
 
     // Handle optional screenshot upload
     if (req.file) {
@@ -509,7 +528,7 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update payment for this booking.' });
     }
 
-    const { amount, transactionId } = req.body;
+    const { amount, transactionId, paymentDate, paymentFrom, paymentTo, paymentMode, attachmentName } = req.body;
 
     if (amount === undefined || amount === '') {
       return res.status(400).json({ success: false, message: 'Payment amount is required' });
@@ -530,15 +549,35 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       return res.status(400).json({ success: false, message: `Payment amount ₹${newPayment} exceeds remaining due balance of ₹${currentDue}` });
     }
 
+    let screenshotPath = '';
+    if (req.file) {
+      screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
+    const newPaymentId = `${100000 + Math.floor(Math.random() * 900000)}`;
+
+    const newPaymentItem = {
+      paymentId: newPaymentId,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+      paymentFrom: paymentFrom || 'TRAVELER',
+      paymentTo: paymentTo || 'COMPANY',
+      amountPaid: newPayment,
+      paymentMode: paymentMode || 'upi',
+      status: 'VERIFICATION-REQUIRED',
+      addedBy: req.user.name,
+      attachment: screenshotPath || undefined,
+      attachmentName: attachmentName || (req.file ? req.file.originalname : ''),
+      details: transactionId.trim(),
+      verified: false,
+      invoiceNumber: `INV-${booking.bookingId}-${newPaymentId}`
+    };
+
+    booking.payments.push(newPaymentItem);
+
     // Update paidAmount and transactionId
     booking.paidAmount += newPayment;
     booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
     booking.transactionId = transactionId.trim();
-
-    // Handle optional screenshot upload
-    if (req.file) {
-      booking.screenshot = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-    }
 
     // Automated Status Transition
     if (booking.dueAmount <= 0) {
@@ -550,7 +589,7 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
     // Automated System Comment Audit log
     booking.comments.push({
       senderName: `System / ${req.user.name}`,
-      message: `Payment Updated: Added ₹${newPayment}. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}. Transaction ID: ${booking.transactionId}.`,
+      message: `Payment Updated: Added ₹${newPayment} (${newPaymentItem.paymentFrom} to ${newPaymentItem.paymentTo}) via ${newPaymentItem.paymentMode}. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}. Transaction ID: ${booking.transactionId}.`,
       timestamp: new Date()
     });
 
@@ -568,6 +607,141 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
     });
   } catch (error) {
     console.error('Update payment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Edit a specific payment entry
+// @route   PUT /api/bookings/:id/edit-payment/:paymentId
+// @access  Private & Verified
+router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single('screenshot'), async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Permission check: Admin, Creator, or Assigned Employee
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to edit payments for this booking.' });
+    }
+
+    const { paymentId } = req.params;
+    const paymentIndex = booking.payments.findIndex(p => p.paymentId === paymentId || p._id.toString() === paymentId);
+    if (paymentIndex === -1) {
+      return res.status(404).json({ success: false, message: 'Payment entry not found' });
+    }
+
+    const payment = booking.payments[paymentIndex];
+    const { amountPaid, paymentMode, paymentDate, paymentFrom, paymentTo, details, status, attachmentName } = req.body;
+
+    // Recalculate paidAmount
+    if (amountPaid !== undefined) {
+      const oldAmount = payment.amountPaid;
+      const newAmount = Number(amountPaid);
+      if (oldAmount !== newAmount) {
+        return res.status(400).json({ success: false, message: 'Paid amount cannot be modified once added.' });
+      }
+    }
+
+    if (paymentMode) payment.paymentMode = paymentMode;
+    if (paymentDate) payment.paymentDate = new Date(paymentDate);
+    if (paymentFrom) payment.paymentFrom = paymentFrom;
+    if (paymentTo) payment.paymentTo = paymentTo;
+    if (details) {
+      payment.details = details;
+      booking.transactionId = details; // update latest transaction ID
+    }
+    if (status) {
+      payment.status = status;
+      payment.verified = status === 'PAID';
+    }
+    if (attachmentName) payment.attachmentName = attachmentName;
+
+    if (req.file) {
+      const screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      payment.attachment = screenshotPath;
+    }
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({
+      success: true,
+      message: 'Payment updated successfully',
+      data: updatedBooking,
+    });
+  } catch (error) {
+    console.error('Edit payment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Verify or toggle status of a payment entry / Send Receipt
+// @route   PATCH /api/bookings/:id/verify-payment/:paymentId
+// @access  Private & Verified
+router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const { paymentId } = req.params;
+    const payment = booking.payments.find(p => p.paymentId === paymentId || p._id.toString() === paymentId);
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment entry not found' });
+    }
+
+    const { status, action } = req.body;
+
+    if (action === 'send-receipt') {
+      booking.comments.push({
+        senderName: 'System / Mailer',
+        message: `Payment Receipt Sent: Receipt for payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been successfully emailed to ${booking.travellerEmail}.`,
+        timestamp: new Date()
+      });
+    } else if (status) {
+      payment.status = status;
+      payment.verified = status === 'PAID';
+      
+      booking.comments.push({
+        senderName: `System / ${req.user.name}`,
+        message: `Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) status updated to ${status}.`,
+        timestamp: new Date()
+      });
+    }
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({
+      success: true,
+      message: action === 'send-receipt' ? 'Receipt email queued successfully' : 'Payment status updated',
+      data: updatedBooking,
+    });
+  } catch (error) {
+    console.error('Verify payment error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
