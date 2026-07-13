@@ -1,13 +1,64 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageSquare, AlertCircle } from 'lucide-react';
+import { Send, MessageSquare, AlertCircle, Paperclip, FileText, X } from 'lucide-react';
 import { API_BASE } from '../config';
 
 const CommentSection = ({ booking, token, onCommentAdded }) => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [file, setFile] = useState(null);
+  const [filePreview, setFilePreview] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   
   const commentsEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const handleOpenFile = (fileUrl, fileName) => {
+    if (fileUrl.startsWith('data:application/pdf') || fileUrl.includes('pdf')) {
+      const newWindow = window.open();
+      if (newWindow) {
+        newWindow.document.write(
+          `<iframe src="${fileUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`
+        );
+        newWindow.document.title = fileName || 'Attachment';
+      } else {
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = fileName || 'attachment.pdf';
+        link.click();
+      }
+    } else {
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = fileName || 'attachment';
+      link.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    
+    if (selectedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFilePreview(event.target.result);
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setFilePreview('');
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    setFilePreview('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Auto-scroll to the bottom of the comments list
   const scrollToBottom = () => {
@@ -20,19 +71,24 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!message.trim()) return;
+    if (!message.trim() && !file) return;
 
     setIsSubmitting(true);
     setError('');
 
     try {
+      const formData = new FormData();
+      formData.append('message', message);
+      if (file) {
+        formData.append('file', file);
+      }
+
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/comment`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ message }),
+        body: formData,
       });
 
       const data = await res.json();
@@ -40,6 +96,7 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
 
       if (data.success) {
         setMessage('');
+        handleRemoveFile();
         if (onCommentAdded) {
           onCommentAdded(data.data);
         }
@@ -115,13 +172,39 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                 
                 {/* Bubble color: Frisky Teal #00A89E for Admin, Charcoal #1A1A1A for Agent */}
                 <div
-                  className={`p-3 rounded-2xl text-sm leading-relaxed border ${
+                  className={`p-3 rounded-2xl text-sm leading-relaxed border flex flex-col gap-2 ${
                     isAdmin
                       ? 'bg-[#00A89E] text-white border-[#00A89E]/20 shadow-md shadow-[#00A89E]/5 rounded-tl-none'
                       : 'bg-[#1A1A1A] text-slate-200 border-slate-800 rounded-tr-none'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap">{comment.message}</p>
+                  {comment.message && <p className="whitespace-pre-wrap">{comment.message}</p>}
+                  
+                  {comment.fileUrl && (
+                    <div className={`pt-2 ${comment.message ? 'border-t border-slate-750/30' : ''}`}>
+                      {comment.fileType && comment.fileType.startsWith('image/') ? (
+                        <div className="max-w-[240px] rounded-lg overflow-hidden border border-slate-850 bg-slate-950">
+                          <img
+                            src={comment.fileUrl}
+                            alt={comment.fileName || 'Attachment'}
+                            className="w-full h-auto object-contain max-h-[160px] cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setSelectedImage({ url: comment.fileUrl, name: comment.fileName })}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenFile(comment.fileUrl, comment.fileName)}
+                          className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span className="underline truncate max-w-[200px]" title={comment.fileName}>
+                            {comment.fileName || 'Open PDF'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -137,32 +220,112 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
 
       {/* Comment Form */}
       <form onSubmit={handleSubmit} className="mt-auto">
-        <div className="relative flex items-center">
+        {file && (
+          <div className="flex items-center gap-3 p-2 bg-slate-950 border border-slate-800 rounded-xl mb-2 animate-scaleUp">
+            {filePreview ? (
+              <img src={filePreview} alt="upload preview" className="w-10 h-10 object-cover rounded-lg border border-slate-800" />
+            ) : (
+              <div className="w-10 h-10 bg-slate-900 border border-slate-800 flex items-center justify-center rounded-lg text-indigo-400 font-extrabold text-[10px]">
+                PDF
+              </div>
+            )}
+            <div className="flex-grow min-w-0">
+              <p className="text-xs font-bold text-slate-300 truncate">{file.name}</p>
+              <p className="text-[10px] text-slate-500 font-medium">{(file.size / 1024).toFixed(1)} KB</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveFile}
+              className="p-1 hover:bg-slate-900 text-slate-500 hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <div className="relative flex items-center gap-2">
           <input
-            type="text"
-            placeholder="Type a message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            disabled={isSubmitting}
-            className="w-full pl-4 pr-12 py-2.5 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors"
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/png, image/jpeg, image/jpg, application/pdf"
+            className="hidden"
           />
           <button
-            type="submit"
-            disabled={!message.trim() || isSubmitting}
-            className={`absolute right-1.5 p-2 rounded-lg text-white transition-all cursor-pointer ${
-              message.trim() && !isSubmitting
-                ? 'bg-[#00A89E] hover:bg-[#008f86] shadow-sm'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
-            }`}
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSubmitting}
+            className="p-2.5 bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-[#00A89E] rounded-xl transition-all cursor-pointer disabled:opacity-50"
+            title="Attach file"
           >
-            {isSubmitting ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+            <Paperclip className="w-5 h-5" />
           </button>
+
+          <div className="relative flex-grow flex items-center">
+            <input
+              type="text"
+              placeholder="Type a message..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full pl-4 pr-12 py-2.5 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={(!message.trim() && !file) || isSubmitting}
+              className={`absolute right-1.5 p-2 rounded-lg text-white transition-all cursor-pointer ${
+                (message.trim() || file) && !isSubmitting
+                  ? 'bg-[#00A89E] hover:bg-[#008f86] shadow-sm'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
+              }`}
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+          </div>
         </div>
       </form>
+
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="relative bg-slate-900 border border-slate-800 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl animate-scaleUp">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+              <h3 className="text-base font-bold text-slate-100 font-sans">{selectedImage.name || 'Attachment Preview'}</h3>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 bg-slate-950 flex justify-center items-center overflow-auto max-h-[70vh]">
+              <img
+                src={selectedImage.url}
+                alt="Attachment Preview"
+                className="max-w-full max-h-[60vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 text-xs text-slate-500 font-sans flex justify-between items-center">
+              <span>Uploaded in chat log</span>
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = selectedImage.url;
+                  link.download = selectedImage.name || 'download';
+                  link.click();
+                }}
+                className="text-xs font-bold text-indigo-400 hover:text-[#00A89E] underline cursor-pointer"
+              >
+                Download File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

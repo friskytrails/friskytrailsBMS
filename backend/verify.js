@@ -16,9 +16,10 @@ const runTests = async () => {
     process.exit(1);
   }
 
-  // Clear any existing test users
+  // Clear any existing test users and bookings
   const testEmails = ['test_employee_verify@example.com', 'test_admin_verify@example.com'];
   await User.deleteMany({ email: { $in: testEmails } });
+  await Booking.deleteMany({ transactionId: 'TXN-TEST-999' });
 
   let testEmployeeId;
   let testAdminId;
@@ -103,18 +104,70 @@ const runTests = async () => {
     console.log('✓ Test Booking saved.');
     console.log(`  - Booking ID: ${booking.bookingId} (Expected: auto-generated unique string BK-XXXXXX)`);
     console.log(`  - Total Amount: ${booking.totalAmount}`);
-    console.log(`  - Paid Amount: ${booking.paidAmount}`);
-    console.log(`  - Due Amount: ${booking.dueAmount} (Expected: 900)`);
+    console.log(`  - Initial Paid Amount (Unverified): ${booking.paidAmount} (Expected: 0)`);
+    console.log(`  - Initial Due Amount (Unverified): ${booking.dueAmount} (Expected: 1500)`);
 
     if (!booking.bookingId || !booking.bookingId.startsWith('BK-')) {
       throw new Error(`Booking ID format is invalid: ${booking.bookingId}`);
     }
 
-    if (booking.dueAmount !== 900) {
-      throw new Error(`Due amount calculation is incorrect. Got ${booking.dueAmount}, expected 900.`);
+    if (booking.paidAmount !== 0) {
+      throw new Error(`Initially paidAmount should be 0 (unverified). Got ${booking.paidAmount}`);
+    }
+    if (booking.dueAmount !== 1500) {
+      throw new Error(`Initially dueAmount should be 1500. Got ${booking.dueAmount}, expected 1500.`);
     }
 
-    console.log('✓ Booking ID auto-generation and due amount calculations verified.');
+    // Admin verifies the initial payment
+    const payment = booking.payments[0];
+    payment.status = 'VERIFIED';
+    payment.verified = true;
+    await booking.save();
+
+    console.log(`  - Verified Paid Amount: ${booking.paidAmount} (Expected: 600)`);
+    console.log(`  - Verified Due Amount: ${booking.dueAmount} (Expected: 900)`);
+
+    if (booking.paidAmount !== 600) {
+      throw new Error(`After verification paidAmount should be 600. Got ${booking.paidAmount}`);
+    }
+    if (booking.dueAmount !== 900) {
+      throw new Error(`After verification dueAmount should be 900. Got ${booking.dueAmount}`);
+    }
+
+    console.log('✓ Booking ID auto-generation, unverified locking, and verified calculations verified.');
+
+    // 5. Test Tasks Checklist Initialization
+    if (!booking.tasks || booking.tasks.length !== 9) {
+      throw new Error(`Tasks checklist size is incorrect. Expected 9, got ${booking.tasks ? booking.tasks.length : 0}`);
+    }
+
+    const createdTask = booking.tasks.find(t => t.taskName === 'Booking Created');
+    const paymentTask = booking.tasks.find(t => t.taskName === 'Initial Payment Submitted');
+    const hotelTask = booking.tasks.find(t => t.taskName === 'Hotel Booked');
+
+    if (!createdTask || !createdTask.isCompleted || createdTask.updatedBy !== 'System') {
+      throw new Error('Booking Created task is not automatically completed by System.');
+    }
+    if (!paymentTask || !paymentTask.isCompleted || paymentTask.updatedBy !== 'System') {
+      throw new Error('Initial Payment Submitted task is not automatically completed by System.');
+    }
+    if (!hotelTask || hotelTask.isCompleted || hotelTask.updatedBy !== '') {
+      throw new Error('Operations tasks (like Hotel Booked) should be uncompleted by default.');
+    }
+
+    // Toggle tasks
+    hotelTask.isCompleted = true;
+    hotelTask.updatedBy = 'Test User';
+    hotelTask.updatedAt = new Date();
+    await booking.save();
+
+    const updatedChecklistBooking = await Booking.findById(booking._id);
+    const updatedHotelTask = updatedChecklistBooking.tasks.find(t => t.taskName === 'Hotel Booked');
+    if (!updatedHotelTask || !updatedHotelTask.isCompleted || updatedHotelTask.updatedBy !== 'Test User') {
+      throw new Error('Failed to persist task toggle modifications.');
+    }
+
+    console.log('✓ Operations checklist tasks and automatic logging verified.');
 
     // Clean up booking
     await Booking.deleteOne({ _id: booking._id });

@@ -62,6 +62,8 @@ const BookingDetails = () => {
 
   // Customer Feedback local state
   const [feedbackRating, setFeedbackRating] = useState('5');
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [savingFeedback, setSavingFeedback] = useState(false);
 
   // Admin Assignment state
   const [employees, setEmployees] = useState([]);
@@ -107,6 +109,7 @@ const BookingDetails = () => {
 
   // Profit Margin State
   const [profitMarginInput, setProfitMarginInput] = useState(0);
+  const [togglingTaskId, setTogglingTaskId] = useState(null);
 
   // --- Full Booking Edit States ---
   const [isFullEditModalOpen, setIsFullEditModalOpen] = useState(false);
@@ -147,6 +150,14 @@ const BookingDetails = () => {
 
     fetchBookingDetails();
   }, [bookingId, token]);
+
+  // Sync feedback states with booking details updates
+  useEffect(() => {
+    if (booking) {
+      setFeedbackRating(booking.feedbackRating?.toString() || '5');
+      setFeedbackComment(booking.feedbackComment || '');
+    }
+  }, [booking]);
 
   // Fetch verified employees list for Admin assignment dropdown
   useEffect(() => {
@@ -526,6 +537,98 @@ const BookingDetails = () => {
     }
   };
 
+  const handleVerifyPayment = async (paymentId, status) => {
+    let reason = '';
+    if (status === 'REJECTED') {
+      reason = window.prompt('Enter rejection reason:') || 'No reason provided';
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/verify-payment/${paymentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status, reason }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+      } else {
+        alert(data.message || 'Failed to update payment status');
+      }
+    } catch (err) {
+      console.error('Verify payment error:', err);
+      alert('Network error while updating payment status');
+    }
+  };
+
+  const handleToggleTask = async (taskName) => {
+    if (!canEdit) {
+      alert('You do not have permission to toggle tasks on this booking.');
+      return;
+    }
+
+    if (taskName === 'Booking Created' || taskName === 'Initial Payment Submitted') {
+      return;
+    }
+
+    setTogglingTaskId(taskName);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/toggle-task`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ taskName }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+      } else {
+        alert(data.message || 'Failed to toggle task');
+      }
+    } catch (err) {
+      console.error('Error toggling task:', err);
+      alert('Connection error');
+    } finally {
+      setTogglingTaskId(null);
+    }
+  };
+
+  const handleSaveFeedback = async () => {
+    setSavingFeedback(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          feedbackRating: Number(feedbackRating),
+          feedbackComment: feedbackComment
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+        alert('Feedback updated successfully!');
+      } else {
+        alert(data.message || 'Failed to save feedback');
+      }
+    } catch (err) {
+      console.error('Error saving feedback:', err);
+      alert('Connection error while saving feedback');
+    } finally {
+      setSavingFeedback(false);
+    }
+  };
+
   const handleProfitMarginSave = async (val) => {
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit`, {
@@ -683,9 +786,7 @@ const BookingDetails = () => {
     { id: 'overview', name: 'BOOKING OVERVIEW' },
     { id: 'traveler', name: 'TRAVELER DETAILS' },
     { id: 'payments', name: 'PAYMENTS & RECEIPTS' },
-    { id: 'services', name: 'BOOKING SERVICES' },
-    { id: 'comments', name: 'COMMENTS & UPDATES' },
-    { id: 'documents', name: 'DOCUMENTS' }
+    { id: 'comments', name: 'COMMENTS & UPDATES' }
   ];
 
   return (
@@ -1036,20 +1137,44 @@ const BookingDetails = () => {
                   )}
                 </div>
 
-                {/* Customer Feedback rating dropdown */}
-                <div className="space-y-2 pt-4 border-t border-slate-800">
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block">Customer Feedback</label>
-                  <select
-                    value={feedbackRating}
-                    onChange={(e) => setFeedbackRating(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-xs md:text-sm text-slate-205 font-bold focus:outline-none transition-colors cursor-pointer"
+                {/* Customer Feedback rating dropdown & comment box */}
+                <div className="space-y-4 pt-4 border-t border-slate-800">
+                  <label className="text-xs md:text-sm font-extrabold text-slate-400 uppercase tracking-wider block">Customer Feedback</label>
+                  
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rating</span>
+                    <select
+                      value={feedbackRating}
+                      onChange={(e) => setFeedbackRating(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-xs md:text-sm text-slate-205 font-bold focus:outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="5">⭐⭐⭐⭐⭐ (5 Stars - Excellent)</option>
+                      <option value="4">⭐⭐⭐⭐ (4 Stars - Very Good)</option>
+                      <option value="3">⭐⭐⭐ (3 Stars - Good)</option>
+                      <option value="2">⭐⭐ (2 Stars - Fair)</option>
+                      <option value="1">⭐ (1 Star - Poor)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Detailed Review</span>
+                    <textarea
+                      value={feedbackComment}
+                      onChange={(e) => setFeedbackComment(e.target.value)}
+                      placeholder="Write customer's detailed review here..."
+                      rows={3}
+                      className="w-full px-4 py-3 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-xs md:text-sm text-slate-300 font-medium focus:outline-none transition-colors resize-none placeholder-slate-600"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={savingFeedback}
+                    onClick={handleSaveFeedback}
+                    className="w-full py-2.5 px-4 bg-[#00A89E] hover:bg-[#008F87] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md disabled:opacity-50"
                   >
-                    <option value="5">⭐⭐⭐⭐⭐ (5 Stars - Excellent)</option>
-                    <option value="4">⭐⭐⭐⭐ (4 Stars - Very Good)</option>
-                    <option value="3">⭐⭐⭐ (3 Stars - Good)</option>
-                    <option value="2">⭐⭐ (2 Stars - Fair)</option>
-                    <option value="1">⭐ (1 Star - Poor)</option>
-                  </select>
+                    {savingFeedback ? 'Saving...' : 'Save Feedback'}
+                  </button>
                 </div>
               </div>
 
@@ -1084,42 +1209,62 @@ const BookingDetails = () => {
                     </div>
                   </div>
 
-                  {/* Status Table (Activity Log) - Expanded size & padding */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
-                    <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
-                      <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">System Activity Audit Log</span>
-                      <span className="text-[10px] font-mono text-slate-500">Live Status</span>
+                  {/* System Activity Audit Log Card */}
+                  <div className="bg-[#FCF8F4] border border-orange-100 rounded-xl overflow-hidden shadow-sm p-5 space-y-4">
+                    <div className="flex justify-between items-center pb-2 border-b border-orange-100/50">
+                      <span className="text-sm font-extrabold uppercase tracking-wider text-[#1A1A1A]">SYSTEM ACTIVITY AUDIT LOG</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold tracking-wide uppercase border border-emerald-100/80">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                        Live Status
+                      </span>
                     </div>
                     
-                    <div className="max-h-[300px] overflow-y-auto divide-y divide-slate-850">
+                    <div className="max-h-[350px] overflow-y-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
-                          <tr className="border-b border-slate-850 text-[10px] md:text-xs uppercase font-extrabold text-slate-500 bg-slate-900/50">
-                            <th className="py-2.5 px-4 w-10">OK</th>
+                          <tr className="border-b border-orange-100/40 text-[10px] md:text-xs uppercase font-extrabold text-[#7D8C93]/80">
+                            <th className="py-2.5 px-3 w-12 text-center">OK</th>
                             <th className="py-2.5 px-3">Task Name</th>
                             <th className="py-2.5 px-3 text-right">By</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-850/30">
-                          {getActivityLog().map((log) => (
-                            <tr key={log.id} className="text-xs text-slate-300 hover:bg-slate-900/60 transition-colors">
-                              <td className="py-3.5 px-4">
-                                {log.completed ? (
-                                  <Check className="w-4 h-4 text-[#00A89E] stroke-[2.5]" />
-                                ) : (
-                                  <div className="w-4 h-4 rounded-full border border-slate-700 bg-slate-950 flex items-center justify-center">
-                                    <span className="w-2 h-2 rounded-full bg-slate-850 animate-pulse"></span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="py-3.5 px-3 font-semibold text-slate-205 max-w-[150px] truncate" title={log.taskName}>
-                                {log.taskName}
-                              </td>
-                              <td className="py-3.5 px-3 text-right font-mono text-[10px] text-slate-400">
-                                {log.updatedBy.replace('System / ', '')}
-                              </td>
-                            </tr>
-                          ))}
+                        <tbody className="divide-y divide-orange-100/20">
+                          {(booking.tasks || []).map((task) => {
+                            const isSystemTask = task.taskName === 'Booking Created' || task.taskName === 'Initial Payment Submitted';
+                            const isClickable = canEdit && !isSystemTask;
+                            
+                            return (
+                              <tr key={task._id || task.taskName} className="text-xs text-[#1A1A1A] hover:bg-orange-50/30 transition-colors">
+                                <td className="py-3 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    disabled={!isClickable || togglingTaskId === task.taskName}
+                                    onClick={() => handleToggleTask(task.taskName)}
+                                    className={`inline-flex items-center justify-center p-1 rounded-md transition-all ${
+                                      isClickable ? 'cursor-pointer hover:bg-orange-100/40' : 'cursor-not-allowed opacity-85'
+                                    }`}
+                                    title={isSystemTask ? "System log cannot be changed" : !canEdit ? "No permission to edit" : "Toggle task completion"}
+                                  >
+                                    {task.isCompleted ? (
+                                      <svg className="w-5 h-5 text-[#00A89E] stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="w-5 h-5 text-rose-500 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </td>
+                                <td className="py-3 px-3 font-bold text-[#1A1A1A] text-left">
+                                  {task.taskName}
+                                </td>
+                                <td className="py-3 px-3 text-right font-semibold text-[#7D8C93]">
+                                  {task.isCompleted ? task.updatedBy || 'System' : ''}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1342,12 +1487,10 @@ const BookingDetails = () => {
                       <tr className="border-b border-slate-850 text-xs uppercase font-extrabold text-slate-500 bg-slate-900">
                         <th className="py-3 px-4">ID</th>
                         <th className="py-3 px-3">Payment Date</th>
-                        <th className="py-3 px-3">Payment From</th>
-                        <th className="py-3 px-3">Payment To</th>
+                        <th className="py-3 px-3">From/To</th>
                         <th className="py-3 px-3">Amount Paid</th>
-                        <th className="py-3 px-3">Mode of Payment</th>
+                        <th className="py-3 px-3">Mode</th>
                         <th className="py-3 px-3">Status</th>
-                        <th className="py-3 px-3 text-center">Send Receipt</th>
                         <th className="py-3 px-3">Added By</th>
                         <th className="py-3 px-3">Attachment</th>
                         <th className="py-3 px-3">Details</th>
@@ -1358,7 +1501,7 @@ const BookingDetails = () => {
                     <tbody className="divide-y divide-slate-850">
                       {getFilteredPayments().length === 0 ? (
                         <tr>
-                          <td colSpan="13" className="py-8 text-center text-slate-500 italic">
+                          <td colSpan="11" className="py-8 text-center text-slate-500 italic">
                             No payment records found.
                           </td>
                         </tr>
@@ -1367,28 +1510,19 @@ const BookingDetails = () => {
                           <tr key={p._id || p.paymentId} className="text-xs text-slate-300 hover:bg-slate-900/40 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-400">{p.paymentId}</td>
                             <td className="py-3.5 px-3 font-semibold">{formatDate(p.paymentDate)}</td>
-                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom}</td>
-                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentTo}</td>
+                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom} to {p.paymentTo}</td>
                             <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{p.amountPaid.toLocaleString()}</td>
-                            <td className="py-3.5 px-3 font-semibold text-indigo-500">{p.paymentMode}</td>
+                            <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{p.paymentMode}</td>
                             <td className="py-3.5 px-3">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                                p.status === 'PAID'
-                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25'
-                                  : p.status === 'DISAPPROVED'
-                                  ? 'bg-rose-500/10 text-rose-500 border-rose-500/25'
-                                  : 'bg-amber-500/10 text-amber-500 border-amber-500/25'
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${
+                                p.status === 'VERIFIED' || p.status === 'PAID'
+                                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
+                                  : p.status === 'REJECTED' || p.status === 'DISAPPROVED'
+                                  ? 'bg-rose-500/10 text-rose-600 border-rose-500/25'
+                                  : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
                               }`}>
                                 {p.status}
                               </span>
-                            </td>
-                            <td className="py-3.5 px-3 text-center">
-                              <button
-                                onClick={() => handleSendReceipt(p.paymentId)}
-                                className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
-                              >
-                                SEND
-                              </button>
                             </td>
                             <td className="py-3.5 px-3 font-semibold text-slate-400">{p.addedBy}</td>
                             <td className="py-3.5 px-3">
@@ -1400,28 +1534,46 @@ const BookingDetails = () => {
                                   OPEN
                                 </button>
                               ) : (
-                                <span className="text-slate-600">None</span>
+                                <span className="text-slate-600">—</span>
                               )}
                             </td>
                             <td className="py-3.5 px-3 font-mono text-[11px] max-w-[150px] truncate" title={p.details}>
                               {p.details}
                             </td>
                             <td className="py-3.5 px-3 text-center">
-                              {p.verified ? (
-                                <Check className="w-4 h-4 text-emerald-400 mx-auto stroke-[2.5]" />
+                              {p.verified || p.status === 'VERIFIED' || p.status === 'PAID' ? (
+                                <Check className="w-4 h-4 text-emerald-500 mx-auto stroke-[2.5]" />
                               ) : (
                                 <span className="text-slate-600">—</span>
                               )}
                             </td>
                             <td className="py-3.5 px-4 text-center">
-                              {canEdit && (
-                                <button
-                                  onClick={() => openEditPayment(p)}
-                                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                                >
-                                  EDIT
-                                </button>
-                              )}
+                              <div className="flex flex-col md:flex-row items-center justify-center gap-1.5">
+                                {canEdit && (
+                                  <button
+                                    onClick={() => openEditPayment(p)}
+                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                  >
+                                    EDIT
+                                  </button>
+                                )}
+                                {user?.role === 'admin' && p.status === 'VERIFICATION-REQUIRED' && (
+                                  <>
+                                    <button
+                                      onClick={() => handleVerifyPayment(p.paymentId, 'VERIFIED')}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                    >
+                                      Verify
+                                    </button>
+                                    <button
+                                      onClick={() => handleVerifyPayment(p.paymentId, 'REJECTED')}
+                                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -1440,98 +1592,7 @@ const BookingDetails = () => {
             </div>
           )}
 
-          {/* TAB 4: BOOKING SERVICES */}
-          {activeTab === 'services' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Package & Booking Services</h3>
-                
-                {/* Localized Edit Trigger for Dates under Services */}
-                <div className="flex items-center gap-2">
-                  {isEditingServices ? (
-                    <>
-                      <button
-                        onClick={handleSaveServices}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setIsEditingServices(false)}
-                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    canEdit && (
-                      <button
-                        onClick={startEditingServices}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-755 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Package Name</label>
-                  <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-2 shadow-inner">
-                    <FileText className="w-5 h-5 text-indigo-650" />
-                    <span>{booking.packageName}</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Destination Location</label>
-                  <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-2 shadow-inner">
-                    <MapPin className="w-5 h-5 text-slate-500" />
-                    <span>{booking.location}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-5 border-t border-slate-850">
-                <div>
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Departure Date</p>
-                  {isEditingServices ? (
-                    <input
-                      type="date"
-                      value={servicesFields.startDate}
-                      onChange={(e) => setServicesFields({ ...servicesFields, startDate: e.target.value })}
-                      className="bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2 text-slate-100 text-sm focus:outline-none"
-                    />
-                  ) : (
-                    <p className="text-sm md:text-base font-bold text-indigo-500 flex items-center gap-2 mt-0.5">
-                      <Calendar className="w-5 h-5 text-slate-500" />
-                      <span>{formatDate(booking.startDate)}</span>
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">Return Date</p>
-                  {isEditingServices ? (
-                    <input
-                      type="date"
-                      value={servicesFields.endDate}
-                      onChange={(e) => setServicesFields({ ...servicesFields, endDate: e.target.value })}
-                      className="bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2 text-slate-100 text-sm focus:outline-none"
-                    />
-                  ) : (
-                    <p className="text-sm md:text-base font-bold text-indigo-500 flex items-center gap-2 mt-0.5">
-                      <Calendar className="w-5 h-5 text-slate-500" />
-                      <span>{formatDate(booking.endDate)}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: COMMENTS & UPDATES */}
+          {/* TAB 4: COMMENTS & UPDATES */}
           {activeTab === 'comments' && (
             <div className="h-full min-h-[480px]">
               <CommentSection
@@ -1541,73 +1602,6 @@ const BookingDetails = () => {
               />
             </div>
           )}
-
-          {/* TAB 6: DOCUMENTS */}
-          {activeTab === 'documents' && (() => {
-            const docs = [];
-            if (booking.screenshot) {
-              docs.push({
-                type: 'Initial Booking Screenshot',
-                src: booking.screenshot,
-                info: 'Uploaded during booking registration.',
-                date: booking.createdAt,
-                name: 'screenshot.jpg'
-              });
-            }
-            if (booking.payments && booking.payments.length > 0) {
-              booking.payments.forEach((payment, idx) => {
-                if (payment.attachment) {
-                  docs.push({
-                    type: `Payment Receipt (₹${payment.amountPaid.toLocaleString()})`,
-                    src: payment.attachment,
-                    info: `Mode: ${payment.paymentMode.toUpperCase()} | Txn ID: ${payment.details || 'N/A'} | Status: ${payment.status}`,
-                    date: payment.paymentDate,
-                    name: payment.attachmentName || `payment_receipt_${idx + 1}.jpg`
-                  });
-                }
-              });
-            }
-
-            return (
-              <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
-                <div className="border-b border-slate-800 pb-3">
-                  <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Uploaded Verification Documents</h3>
-                </div>
-
-                {docs.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {docs.map((doc, idx) => (
-                      <div key={idx} className="bg-slate-950 p-4 border border-slate-800 rounded-xl shadow-inner flex flex-col justify-between space-y-3">
-                        <div className="relative group overflow-hidden rounded-lg bg-slate-900 border border-slate-800 flex justify-center items-center h-[260px]">
-                          <img
-                            src={doc.src.startsWith('data:') ? doc.src : `${API_BASE}/${doc.src}`}
-                            alt={doc.type}
-                            className="max-w-full max-h-full object-contain rounded transition-transform duration-300 group-hover:scale-[1.03] cursor-pointer"
-                            onClick={() => setSelectedScreenshot(doc.src)}
-                          />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-start">
-                            <h4 className="text-sm font-extrabold text-slate-200">{doc.type}</h4>
-                            <span className="text-[10px] text-slate-500 font-bold">{formatDate(doc.date)}</span>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-1">{doc.info}</p>
-                          {doc.name && (
-                            <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">File: {doc.name}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-500">
-                    <FileImage className="w-12 h-12 mx-auto opacity-30 mb-2" />
-                    <p className="text-sm">No verification screenshot or payment receipt uploaded for this booking.</p>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
         </div>
 
@@ -1784,9 +1778,12 @@ const BookingDetails = () => {
                   <select
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none"
+                    disabled={user?.role !== 'admin'}
+                    className="w-full bg-slate-950 border border-slate-800 rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="VERIFICATION-REQUIRED">VERIFICATION-REQUIRED</option>
+                    <option value="VERIFIED">VERIFIED</option>
+                    <option value="REJECTED">REJECTED</option>
                     <option value="PAID">PAID</option>
                     <option value="DISAPPROVED">DISAPPROVED</option>
                   </select>

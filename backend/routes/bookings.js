@@ -387,7 +387,7 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
 // @desc    Add comment to a booking
 // @route   PATCH /api/bookings/:id/comment
 // @access  Private & Verified
-router.patch('/:id/comment', protect, verifiedOnly, async (req, res) => {
+router.patch('/:id/comment', protect, verifiedOnly, upload.single('file'), async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
     if (!booking) {
@@ -404,15 +404,28 @@ router.patch('/:id/comment', protect, verifiedOnly, async (req, res) => {
     }
 
     const { message } = req.body;
-    if (!message || !message.trim()) {
-      return res.status(400).json({ success: false, message: 'Comment message is required' });
+    if ((!message || !message.trim()) && !req.file) {
+      return res.status(400).json({ success: false, message: 'Comment message or file attachment is required' });
+    }
+
+    let fileUrl = '';
+    let fileName = '';
+    let fileType = '';
+
+    if (req.file) {
+      fileUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      fileName = req.file.originalname;
+      fileType = req.file.mimetype;
     }
 
     // Push comment
     booking.comments.push({
       sender: req.user._id,
       senderName: req.user.name,
-      message: message.trim(),
+      message: (message || '').trim(),
+      fileUrl,
+      fileName,
+      fileType,
     });
 
     await booking.save();
@@ -468,6 +481,8 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       children,
       status,
       profitMargin,
+      feedbackRating,
+      feedbackComment,
     } = req.body;
 
     if (startDate) booking.startDate = startDate;
@@ -485,6 +500,8 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
     if (children !== undefined) booking.children = Number(children);
     if (status) booking.status = status;
     if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
+    if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
+    if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
 
     // Handle optional screenshot upload
     if (req.file) {
@@ -574,22 +591,12 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
 
     booking.payments.push(newPaymentItem);
 
-    // Update paidAmount and transactionId
-    booking.paidAmount += newPayment;
-    booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
-    booking.transactionId = transactionId.trim();
+    // Dynamic pre-validate hook will ensure paidAmount and dueAmount do not update for unverified payments.
 
-    // Automated Status Transition
-    if (booking.dueAmount <= 0) {
-      booking.status = 'Payment Done';
-    } else {
-      booking.status = 'Partial Payment';
-    }
-
-    // Automated System Comment Audit log
+    // Automated System Comment Audit log indicating verification needed
     booking.comments.push({
       senderName: `System / ${req.user.name}`,
-      message: `Payment Updated: Added ₹${newPayment} (${newPaymentItem.paymentFrom} to ${newPaymentItem.paymentTo}) via ${newPaymentItem.paymentMode}. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}. Transaction ID: ${booking.transactionId}.`,
+      message: `Payment Added (Verification Required): Added ₹${newPayment} (${newPaymentItem.paymentFrom} to ${newPaymentItem.paymentTo}) via ${newPaymentItem.paymentMode}. Transaction ID: ${newPaymentItem.details}. This payment requires Admin verification before updating the booking total.`,
       timestamp: new Date()
     });
 
@@ -657,8 +664,11 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
       booking.transactionId = details; // update latest transaction ID
     }
     if (status) {
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Only admins can change payment status.' });
+      }
       payment.status = status;
-      payment.verified = status === 'PAID';
+      payment.verified = status === 'VERIFIED';
     }
     if (attachmentName) payment.attachmentName = attachmentName;
 
@@ -695,37 +705,74 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
-    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
-    const isAdmin = req.user.role === 'admin';
-
-    if (!isAdmin && !isCreator && !isAssigned) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
     const { paymentId } = req.params;
     const payment = booking.payments.find(p => p.paymentId === paymentId || p._id.toString() === paymentId);
     if (!payment) {
       return res.status(404).json({ success: false, message: 'Payment entry not found' });
     }
 
-    const { status, action } = req.body;
+    const { status, action, reason } = req.body;
 
+    // Handle send receipt (non-admin allowed)
     if (action === 'send-receipt') {
+      const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+      const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+      const isAdmin = req.user.role === 'admin';
+
+      if (!isAdmin && !isCreator && !isAssigned) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+
       booking.comments.push({
         senderName: 'System / Mailer',
         message: `Payment Receipt Sent: Receipt for payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been successfully emailed to ${booking.travellerEmail}.`,
         timestamp: new Date()
       });
-    } else if (status) {
-      payment.status = status;
-      payment.verified = status === 'PAID';
-      
-      booking.comments.push({
-        senderName: `System / ${req.user.name}`,
-        message: `Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) status updated to ${status}.`,
-        timestamp: new Date()
-      });
+    } else {
+      // Verification status change requires admin privilege
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Unauthorized: Only admins can verify or reject payments.' });
+      }
+
+      if (status === 'VERIFIED' || action === 'approve') {
+        payment.status = 'VERIFIED';
+        payment.verified = true;
+
+        // Recalculate Booking totalPaid and dueAmount
+        booking.paidAmount = booking.payments
+          .filter(p => p.status === 'VERIFIED')
+          .reduce((sum, p) => sum + p.amountPaid, 0);
+        booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
+
+        // Update booking status based on remaining due amount
+        if (booking.dueAmount <= 0) {
+          booking.status = 'Payment Done';
+        } else {
+          booking.status = 'Partial Payment';
+        }
+
+        booking.comments.push({
+          senderName: `System / ${req.user.name}`,
+          message: `Payment Approved: Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been APPROVED. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}.`,
+          timestamp: new Date()
+        });
+      } else if (status === 'REJECTED' || action === 'reject') {
+        payment.status = 'REJECTED';
+        payment.verified = false;
+
+        // Recalculate Booking totalPaid and dueAmount
+        booking.paidAmount = booking.payments
+          .filter(p => p.status === 'VERIFIED')
+          .reduce((sum, p) => sum + p.amountPaid, 0);
+        booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
+
+        const rejectionReason = reason || 'No reason provided';
+        booking.comments.push({
+          senderName: `System / ${req.user.name}`,
+          message: `Payment Rejected: Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) was REJECTED. Reason: ${rejectionReason}.`,
+          timestamp: new Date()
+        });
+      }
     }
 
     await booking.save();
@@ -742,6 +789,75 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
     });
   } catch (error) {
     console.error('Verify payment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Toggle task completion status
+router.patch('/:id/toggle-task', protect, verifiedOnly, async (req, res) => {
+  try {
+    const { taskName } = req.body;
+    if (!taskName) {
+      return res.status(400).json({ success: false, message: 'taskName is required' });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Permissions: Only Admin, Creator, or Assigned Employee can toggle
+    const isAdmin = req.user.role === 'admin';
+    const isCreator = booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo.some(
+      (empId) => empId.toString() === req.user._id.toString()
+    );
+
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to toggle tasks on this booking',
+      });
+    }
+
+    // Find the task by name
+    const task = booking.tasks.find((t) => t.taskName === taskName);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    // System tasks (Booking Created, Initial Payment Submitted) are read-only
+    if (taskName === 'Booking Created' || taskName === 'Initial Payment Submitted') {
+      return res.status(400).json({
+        success: false,
+        message: 'System logged tasks cannot be manually toggled',
+      });
+    }
+
+    // Toggle
+    task.isCompleted = !task.isCompleted;
+    if (task.isCompleted) {
+      task.updatedBy = req.user.name;
+      task.updatedAt = new Date();
+    } else {
+      task.updatedBy = '';
+      task.updatedAt = undefined;
+    }
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({
+      success: true,
+      message: 'Task toggled successfully',
+      data: updatedBooking,
+    });
+  } catch (error) {
+    console.error('Toggle task error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
