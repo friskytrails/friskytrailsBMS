@@ -15,7 +15,8 @@ import {
   Phone,
   MapPin,
   CheckCircle,
-  XCircle
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 import { API_BASE } from '../config';
 
@@ -34,6 +35,29 @@ const AdminDashboard = () => {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [fetchingScreenshotId, setFetchingScreenshotId] = useState(null);
+
+  const handleViewScreenshot = async (bookingId, bookingObjectId) => {
+    setFetchingScreenshotId(bookingObjectId);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/id/${bookingObjectId}/screenshot`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success && data.screenshot) {
+        setSelectedScreenshot(data.screenshot);
+      } else {
+        alert(data.message || 'Screenshot not found or failed to load');
+      }
+    } catch (err) {
+      console.error('Error fetching screenshot:', err);
+      alert('Connection to server failed while loading screenshot');
+    } finally {
+      setFetchingScreenshotId(null);
+    }
+  };
 
   // Active Tab state: 'users' or 'bookings'
   const [activeTab, setActiveTab] = useState('users');
@@ -458,11 +482,16 @@ const AdminDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <button
-                              onClick={() => setSelectedScreenshot(booking.screenshot)}
-                              className="inline-flex items-center space-x-1 py-1.5 px-3 rounded-lg bg-slate-850 text-slate-650 hover:bg-slate-800 hover:text-slate-100 border border-slate-800 text-xs font-semibold transition-all cursor-pointer"
+                              onClick={() => handleViewScreenshot(booking.bookingId, booking._id)}
+                              disabled={fetchingScreenshotId === booking._id}
+                              className="inline-flex items-center space-x-1 py-1.5 px-3 rounded-lg bg-slate-850 text-slate-650 hover:bg-slate-800 hover:text-slate-100 border border-slate-800 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
                             >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>View Receipt</span>
+                              {fetchingScreenshotId === booking._id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Eye className="w-3.5 h-3.5" />
+                              )}
+                              <span>{fetchingScreenshotId === booking._id ? 'Loading...' : 'View Receipt'}</span>
                             </button>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
