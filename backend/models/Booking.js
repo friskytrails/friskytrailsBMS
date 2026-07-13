@@ -34,7 +34,7 @@ const PaymentSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['PAID', 'VERIFICATION-REQUIRED', 'DISAPPROVED'],
+    enum: ['VERIFICATION-REQUIRED', 'VERIFIED', 'REJECTED', 'PAID', 'DISAPPROVED'],
     default: 'VERIFICATION-REQUIRED',
   },
   addedBy: {
@@ -172,6 +172,9 @@ const BookingSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     senderName: String,
     message: String,
+    fileUrl: String,
+    fileName: String,
+    fileType: String,
     timestamp: { type: Date, default: Date.now }
   }],
   payments: {
@@ -181,6 +184,24 @@ const BookingSchema = new mongoose.Schema({
   profitMargin: {
     type: Number,
     default: 0,
+  },
+  tasks: {
+    type: [{
+      taskName: String,
+      isCompleted: { type: Boolean, default: false },
+      updatedBy: { type: String, default: "" },
+      updatedAt: { type: Date }
+    }],
+    default: []
+  },
+  feedbackRating: {
+    type: Number,
+    enum: [1, 2, 3, 4, 5],
+    default: 5
+  },
+  feedbackComment: {
+    type: String,
+    default: ""
   }
 }, {
   timestamps: true,
@@ -214,7 +235,7 @@ function ensureInitialPayment(doc) {
         paymentTo: 'COMPANY',
         amountPaid: initialAmount,
         paymentMode: 'upi',
-        status: isPaid ? 'PAID' : 'VERIFICATION-REQUIRED',
+        status: isPaid ? 'VERIFIED' : 'VERIFICATION-REQUIRED',
         addedBy: 'System Migrator',
         attachment: doc.screenshot,
         attachmentName: 'screenshot.jpg',
@@ -227,8 +248,36 @@ function ensureInitialPayment(doc) {
   }
 }
 
+function ensureTasksChecklist(doc) {
+  if (!doc.tasks || doc.tasks.length === 0) {
+    doc.tasks = [
+      { taskName: 'Confirmation Mail Done', isCompleted: false, updatedBy: '' },
+      { taskName: 'Confirmation Call Done', isCompleted: false, updatedBy: '' },
+      { taskName: 'Hotel Booked', isCompleted: false, updatedBy: '' },
+      { taskName: 'Taxi Booked', isCompleted: false, updatedBy: '' },
+      { taskName: 'Adventure Booked', isCompleted: false, updatedBy: '' },
+      { taskName: 'Connected for Review', isCompleted: false, updatedBy: '' },
+      { taskName: 'Review Done on Website', isCompleted: false, updatedBy: '' },
+      { taskName: 'Booking Created', isCompleted: true, updatedBy: 'System', updatedAt: doc.createdAt || new Date() },
+      { taskName: 'Initial Payment Submitted', isCompleted: true, updatedBy: 'System', updatedAt: doc.createdAt || new Date() }
+    ];
+  }
+}
+
 // Auto-generate Booking ID and calculate due amount pre-validation
 BookingSchema.pre('validate', async function (next) {
+  ensureInitialPayment(this);
+  ensureTasksChecklist(this);
+
+  // Calculate Paid Amount dynamically based on verified sub-payments
+  if (this.payments && this.payments.length > 0) {
+    this.paidAmount = this.payments
+      .filter(p => p.status === 'VERIFIED')
+      .reduce((sum, p) => sum + p.amountPaid, 0);
+  } else {
+    this.paidAmount = 0;
+  }
+
   // Calculate Due Amount
   if (this.totalAmount !== undefined && this.paidAmount !== undefined) {
     this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
@@ -270,14 +319,13 @@ BookingSchema.pre('validate', async function (next) {
     }
   }
 
-  ensureInitialPayment(this);
-
   next();
 });
 
 // Dynamic migration post document load/initialization from database
 BookingSchema.post('init', function (doc) {
   ensureInitialPayment(doc);
+  ensureTasksChecklist(doc);
 });
 
 module.exports = mongoose.model('Booking', BookingSchema);
