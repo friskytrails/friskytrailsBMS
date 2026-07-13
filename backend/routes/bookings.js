@@ -105,9 +105,11 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
+      .select('-screenshot')
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -182,9 +184,11 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
+      .select('-screenshot')
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -203,8 +207,10 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
 router.get('/pending', protect, adminOnly, async (req, res) => {
   try {
     const bookings = await Booking.find({ status: 'Pending' })
+      .select('-screenshot')
       .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
@@ -343,6 +349,35 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
     });
   } catch (error) {
     console.error('Update status error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Get booking payment screenshot
+// @route   GET /api/bookings/id/:id/screenshot
+// @access  Private & Verified
+router.get('/id/:id/screenshot', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id).select('screenshot');
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Permission check: Admin, Creator, or Assigned Employee
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    res.json({
+      success: true,
+      screenshot: booking.screenshot,
+    });
+  } catch (error) {
+    console.error('Get screenshot error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

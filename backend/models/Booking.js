@@ -328,4 +328,10 @@ BookingSchema.post('init', function (doc) {
   ensureTasksChecklist(doc);
 });
 
+BookingSchema.index({ travellerName: 1 });
+BookingSchema.index({ travellerPhone: 1 });
+BookingSchema.index({ location: 1 });
+BookingSchema.index({ createdAt: -1 });
+BookingSchema.index({ startDate: 1 });
+
 module.exports = mongoose.model('Booking', BookingSchema);
