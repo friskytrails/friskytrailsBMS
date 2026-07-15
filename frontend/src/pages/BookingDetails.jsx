@@ -89,7 +89,7 @@ const BookingDetails = () => {
   // --- Payments Ledger & Modal States ---
   const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
-  
+
   // Payment Form States
   const [formAmountPaid, setFormAmountPaid] = useState('');
   const [formPaymentMode, setFormPaymentMode] = useState('upi');
@@ -100,7 +100,7 @@ const BookingDetails = () => {
   const [formAttachment, setFormAttachment] = useState(null);
   const [formAttachmentName, setFormAttachmentName] = useState('');
   const [formStatus, setFormStatus] = useState('VERIFICATION-REQUIRED');
-  
+
   const [formError, setFormError] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
@@ -555,6 +555,7 @@ const BookingDetails = () => {
       const data = await res.json();
       if (data.success) {
         setBooking(data.data);
+        alert(`Payment ${status === 'VERIFIED' ? 'verified' : 'rejected'} successfully!`);
       } else {
         alert(data.message || 'Failed to update payment status');
       }
@@ -717,12 +718,12 @@ const BookingDetails = () => {
         if (isSystem) {
           const parts = comment.senderName.split('/');
           const updatedBy = parts[1] ? parts[1].trim() : 'Auto';
-          
+
           let taskLabel = comment.message;
           if (comment.message.includes('Payment Updated')) {
             taskLabel = 'Payment Updated';
           }
-          
+
           logs.push({
             id: comment._id,
             taskName: taskLabel,
@@ -792,7 +793,7 @@ const BookingDetails = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto animate-fadeIn font-sans space-y-8">
-        
+
         {/* 1. Header & Primary Info Bar */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 pb-6 border-b border-slate-800">
           <div className="flex items-center gap-4">
@@ -808,7 +809,7 @@ const BookingDetails = () => {
               <span className="bg-slate-900 text-slate-100 px-4 py-2 rounded-lg font-mono font-extrabold text-sm md:text-base shadow-sm border border-slate-800">
                 {booking.bookingId}
               </span>
-              
+
               {/* Center: Booking Status Dropdown */}
               {canEdit ? (
                 <div className="relative flex items-center">
@@ -816,9 +817,8 @@ const BookingDetails = () => {
                     value={booking.status || 'Pending'}
                     onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
                     disabled={updatingStatus}
-                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${
-                      getStatusStyles(booking.status)
-                    }`}
+                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${getStatusStyles(booking.status)
+                      }`}
                   >
                     <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
                     <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
@@ -835,9 +835,8 @@ const BookingDetails = () => {
                   )}
                 </div>
               ) : (
-                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${
-                  getStatusStyles(booking.status)
-                }`}>
+                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.status)
+                  }`}>
                   {booking.status}
                 </span>
               )}
@@ -900,11 +899,10 @@ const BookingDetails = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap px-5 py-4 text-xs md:text-sm font-extrabold tracking-wider border-b-2 transition-all duration-150 cursor-pointer ${
-                  isActive
+                className={`whitespace-nowrap px-5 py-4 text-xs md:text-sm font-extrabold tracking-wider border-b-2 transition-all duration-150 cursor-pointer ${isActive
                     ? 'border-[#00A89E] text-[#00A89E]'
                     : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-800'
-                }`}
+                  }`}
               >
                 {tab.name}
               </button>
@@ -914,16 +912,16 @@ const BookingDetails = () => {
 
         {/* Tab Content Display */}
         <div className="mt-6">
-          
+
           {/* TAB 1: BOOKING OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
+
               {/* Column 1: Package Details Card */}
               <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Package Details</h3>
-                  
+
                   {/* Separate Edit Toggle for Package */}
                   <div className="flex items-center gap-2">
                     {isEditingPackage ? (
@@ -954,7 +952,7 @@ const BookingDetails = () => {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Package Name</label>
@@ -1005,7 +1003,7 @@ const BookingDetails = () => {
                 {/* Assigned To Section */}
                 <div className="pt-4 border-t border-slate-800 space-y-4">
                   <label className="text-xs md:text-sm font-extrabold text-slate-400 uppercase tracking-wider block">Assigned Team Members</label>
-                  
+
                   {!booking.assignedTo || booking.assignedTo.length === 0 ? (
                     <p className="text-xs md:text-sm text-slate-500 italic bg-slate-950 border border-slate-800/60 p-3 rounded-lg">
                       No employees assigned to see/manage this booking.
@@ -1065,7 +1063,7 @@ const BookingDetails = () => {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Service Date & Schedule</h3>
-                    
+
                     {/* Inline Edit Trigger for Dates */}
                     <div className="flex items-center gap-2">
                       {isEditingServices ? (
@@ -1096,7 +1094,7 @@ const BookingDetails = () => {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Service Date Input Box */}
                   {isEditingServices ? (
                     <div className="space-y-4 bg-slate-950 p-4 border border-slate-800 rounded-xl">
@@ -1128,7 +1126,7 @@ const BookingDetails = () => {
                       <div className="text-sm md:text-base font-extrabold text-slate-100 mt-1">
                         {formatDate(booking.startDate)} — {formatDate(booking.endDate)}
                       </div>
-                      
+
                       {/* Days Remaining Logic */}
                       <div className="text-xl md:text-2xl font-extrabold mt-1 text-rose-500">
                         {daysDiff > 0 ? `-${daysDiff} days remaining` : daysDiff === 0 ? 'Starts today' : `${Math.abs(daysDiff)} days ago`}
@@ -1140,7 +1138,7 @@ const BookingDetails = () => {
                 {/* Customer Feedback rating dropdown & comment box */}
                 <div className="space-y-4 pt-4 border-t border-slate-800">
                   <label className="text-xs md:text-sm font-extrabold text-slate-400 uppercase tracking-wider block">Customer Feedback</label>
-                  
+
                   <div className="space-y-1.5">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rating</span>
                     <select
@@ -1191,7 +1189,7 @@ const BookingDetails = () => {
                       <span className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider">Total</span>
                       <span className="text-xs md:text-sm font-extrabold text-slate-300 mt-1.5 font-mono">₹{totalAmount.toLocaleString()}</span>
                     </div>
-                    
+
                     <div className="bg-blue-500/10 border border-blue-500/20 p-3.5 rounded-lg flex flex-col justify-between relative shadow-inner">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] md:text-xs font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Paid</span>
@@ -1218,7 +1216,7 @@ const BookingDetails = () => {
                         Live Status
                       </span>
                     </div>
-                    
+
                     <div className="max-h-[350px] overflow-y-auto">
                       <table className="w-full text-left border-collapse">
                         <thead>
@@ -1232,7 +1230,7 @@ const BookingDetails = () => {
                           {(booking.tasks || []).map((task) => {
                             const isSystemTask = task.taskName === 'Booking Created' || task.taskName === 'Initial Payment Submitted';
                             const isClickable = canEdit && !isSystemTask;
-                            
+
                             return (
                               <tr key={task._id || task.taskName} className="text-xs text-[#1A1A1A] hover:bg-orange-50/30 transition-colors">
                                 <td className="py-3 px-3 text-center">
@@ -1240,9 +1238,8 @@ const BookingDetails = () => {
                                     type="button"
                                     disabled={!isClickable || togglingTaskId === task.taskName}
                                     onClick={() => handleToggleTask(task.taskName)}
-                                    className={`inline-flex items-center justify-center p-1 rounded-md transition-all ${
-                                      isClickable ? 'cursor-pointer hover:bg-orange-100/40' : 'cursor-not-allowed opacity-85'
-                                    }`}
+                                    className={`inline-flex items-center justify-center p-1 rounded-md transition-all ${isClickable ? 'cursor-pointer hover:bg-orange-100/40' : 'cursor-not-allowed opacity-85'
+                                      }`}
                                     title={isSystemTask ? "System log cannot be changed" : !canEdit ? "No permission to edit" : "Toggle task completion"}
                                   >
                                     {task.isCompleted ? (
@@ -1280,7 +1277,7 @@ const BookingDetails = () => {
             <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Traveller Information</h3>
-                
+
                 {/* Localized Edit Trigger for Traveler Info */}
                 <div className="flex items-center gap-2">
                   {isEditingTraveler ? (
@@ -1311,7 +1308,7 @@ const BookingDetails = () => {
                   )}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Full Name</label>
@@ -1449,31 +1446,28 @@ const BookingDetails = () => {
                     <span className="text-xs font-extrabold text-slate-400 uppercase">From</span>
                     <button
                       onClick={() => setPaymentSourceFilter('ALL')}
-                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
-                        paymentSourceFilter === 'ALL'
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${paymentSourceFilter === 'ALL'
                           ? 'bg-[#E65F00] text-white border-[#E65F00]'
                           : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
-                      }`}
+                        }`}
                     >
                       ALL
                     </button>
                     <button
                       onClick={() => setPaymentSourceFilter('TRAVELER')}
-                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
-                        paymentSourceFilter === 'TRAVELER'
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${paymentSourceFilter === 'TRAVELER'
                           ? 'bg-[#E65F00] text-white border-[#E65F00]'
                           : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
-                      }`}
+                        }`}
                     >
                       TRAVELER
                     </button>
                     <button
                       onClick={() => setPaymentSourceFilter('COMPANY')}
-                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
-                        paymentSourceFilter === 'COMPANY'
+                      className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${paymentSourceFilter === 'COMPANY'
                           ? 'bg-[#E65F00] text-white border-[#E65F00]'
                           : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
-                      }`}
+                        }`}
                     >
                       COMPANY
                     </button>
@@ -1514,13 +1508,12 @@ const BookingDetails = () => {
                             <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{p.amountPaid.toLocaleString()}</td>
                             <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{p.paymentMode}</td>
                             <td className="py-3.5 px-3">
-                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${
-                                p.status === 'VERIFIED' || p.status === 'PAID'
+                              <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${p.status === 'VERIFIED' || p.status === 'PAID'
                                   ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
                                   : p.status === 'REJECTED' || p.status === 'DISAPPROVED'
-                                  ? 'bg-rose-500/10 text-rose-600 border-rose-500/25'
-                                  : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                              }`}>
+                                    ? 'bg-rose-500/10 text-rose-600 border-rose-500/25'
+                                    : 'bg-amber-500/10 text-amber-600 border-amber-500/25'
+                                }`}>
                                 {p.status}
                               </span>
                             </td>
@@ -1621,11 +1614,26 @@ const BookingDetails = () => {
               </button>
             </div>
             <div className="p-6 bg-slate-950 flex justify-center items-center overflow-auto max-h-[70vh]">
-              <img
-                src={selectedScreenshot.startsWith('data:') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
-                alt="Verification Receipt"
-                className="max-w-full max-h-[60vh] object-contain rounded-lg"
-              />
+              {selectedScreenshot.endsWith('.pdf') || selectedScreenshot.startsWith('data:application/pdf') ? (
+                <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                  <FileText className="w-16 h-16 text-indigo-400" />
+                  <p className="text-sm text-slate-300 font-sans">PDF Document</p>
+                  <a
+                    href={selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+                  >
+                    Open PDF in New Tab
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                  alt="Verification Receipt"
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg"
+                />
+              )}
             </div>
             <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 text-xs text-slate-500 font-sans">
               Uploaded at booking time. Keep for audit clearance record.
@@ -1638,7 +1646,7 @@ const BookingDetails = () => {
       {isAddPaymentModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-lg max-w-md w-full p-6 relative shadow-2xl animate-scaleUp">
-            
+
             {/* Close Button */}
             <button
               onClick={() => setIsAddPaymentModalOpen(false)}
@@ -1660,7 +1668,7 @@ const BookingDetails = () => {
             )}
 
             <form onSubmit={handlePaymentFormSubmit} className="space-y-4">
-              
+
               {/* Amount Paid * */}
               <div>
                 <input
@@ -1821,7 +1829,7 @@ const BookingDetails = () => {
       {isFullEditModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-lg max-w-2xl w-full p-6 relative shadow-2xl animate-scaleUp">
-            
+
             {/* Close Button */}
             <button
               onClick={() => setIsFullEditModalOpen(false)}
@@ -1843,15 +1851,15 @@ const BookingDetails = () => {
             )}
 
             <form onSubmit={handleFullEditSubmit} className="space-y-6">
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 {/* Column 1: Traveler Details */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-extrabold text-[#00A89E] uppercase tracking-wider border-b border-slate-800 pb-1">
                     Traveler Details
                   </h4>
-                  
+
                   <div>
                     <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
                       Traveller Name

@@ -30,6 +30,7 @@ const CreateBooking = ({ isEdit }) => {
 
   const [screenshot, setScreenshot] = useState(null);
   const [screenshotName, setScreenshotName] = useState('');
+  const [screenshotPreview, setScreenshotPreview] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -96,6 +97,7 @@ const CreateBooking = ({ isEdit }) => {
           });
           if (b.screenshot) {
             setScreenshotName('Existing screenshot kept');
+            setScreenshotPreview(b.screenshot.startsWith('data:') || b.screenshot.startsWith('http') ? b.screenshot : `${API_BASE}/${b.screenshot}`);
           }
         } else {
           setError(data.message || 'Failed to load booking details for editing');
@@ -238,6 +240,7 @@ const CreateBooking = ({ isEdit }) => {
     if (file) {
       setScreenshot(file);
       setScreenshotName(file.name);
+      setScreenshotPreview(URL.createObjectURL(file));
       setTouched((prev) => ({ ...prev, screenshot: true }));
     }
   };
@@ -779,6 +782,15 @@ const CreateBooking = ({ isEdit }) => {
                     />
                   </label>
                 </div>
+                {screenshotPreview && (
+                  <div className="mt-3 max-w-[200px] rounded-xl overflow-hidden border border-slate-800 bg-slate-950/40 p-2 shadow-inner">
+                    <img
+                      src={screenshotPreview}
+                      alt="Screenshot Preview"
+                      className="w-full h-auto object-contain max-h-32 rounded-lg"
+                    />
+                  </div>
+                )}
                 {touched.screenshot && validationErrors.screenshot && (
                   <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5" />

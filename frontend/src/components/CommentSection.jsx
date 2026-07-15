@@ -180,31 +180,36 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                 >
                   {comment.message && <p className="whitespace-pre-wrap">{comment.message}</p>}
                   
-                  {comment.fileUrl && (
-                    <div className={`pt-2 ${comment.message ? 'border-t border-slate-750/30' : ''}`}>
-                      {comment.fileType && comment.fileType.startsWith('image/') ? (
-                        <div className="max-w-[240px] rounded-lg overflow-hidden border border-slate-850 bg-slate-950">
-                          <img
-                            src={comment.fileUrl}
-                            alt={comment.fileName || 'Attachment'}
-                            className="w-full h-auto object-contain max-h-[160px] cursor-pointer hover:opacity-90 transition-opacity"
-                            onClick={() => setSelectedImage({ url: comment.fileUrl, name: comment.fileName })}
-                          />
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenFile(comment.fileUrl, comment.fileName)}
-                          className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
-                        >
-                          <FileText className="w-4 h-4" />
-                          <span className="underline truncate max-w-[200px]" title={comment.fileName}>
-                            {comment.fileName || 'Open PDF'}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  )}
+                  {comment.fileUrl && (() => {
+                    const fullUrl = comment.fileUrl.startsWith('data:') || comment.fileUrl.startsWith('http')
+                      ? comment.fileUrl
+                      : `${API_BASE}/${comment.fileUrl}`;
+                    return (
+                      <div className={`pt-2 ${comment.message ? 'border-t border-slate-755/30' : ''}`}>
+                        {comment.fileType && comment.fileType.startsWith('image/') ? (
+                          <div className="max-w-[240px] rounded-lg overflow-hidden border border-slate-855 bg-slate-950">
+                            <img
+                              src={fullUrl}
+                              alt={comment.fileName || 'Attachment'}
+                              className="w-full h-auto object-contain max-h-[160px] cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => setSelectedImage({ url: fullUrl, name: comment.fileName })}
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFile(fullUrl, comment.fileName)}
+                            className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span className="underline truncate max-w-[200px]" title={comment.fileName}>
+                              {comment.fileName || 'Open PDF'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );
