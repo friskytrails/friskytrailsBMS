@@ -356,15 +356,14 @@ const SearchDashboard = () => {
               <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 <tr>
                   <th className="px-6 py-4">Booking ID</th>
-                  <th className="px-6 py-4">Payment ID</th>
                   <th className="px-6 py-4">Booking Date</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Traveller Details</th>
-                  <th className="px-6 py-4">Trip Details</th>
-                  <th className="px-6 py-4">Financials</th>
-                  <th className="px-6 py-4">Verification Info</th>
-                  {user?.role === 'admin' && <th className="px-6 py-4">Created By</th>}
-                  <th className="px-6 py-4 text-center">Screenshot</th>
+                  <th className="px-6 py-4">Client Name</th>
+                  <th className="px-6 py-4 text-right">Total Amount</th>
+                  <th className="px-6 py-4 text-right">Paid Amount</th>
+                  <th className="px-6 py-4 text-right">Due Amount</th>
+                  <th className="px-6 py-4">Start Date</th>
+                  <th className="px-6 py-4">End Date</th>
+                  <th className="px-6 py-4">Trip Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 bg-slate-950/20">
@@ -376,15 +375,28 @@ const SearchDashboard = () => {
                       </Link>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-mono text-xs text-indigo-400 font-bold">
-                        {booking.paymentId || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-xs text-slate-400 flex items-center gap-1">
                         <CalendarDays className="w-3.5 h-3.5 text-indigo-600" />
                         {formatDate(booking.createdAt)}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-100">
+                      {booking.travellerName}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-xs text-slate-200">
+                      ₹{booking.totalAmount}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-xs text-emerald-400 font-semibold">
+                      ₹{booking.paidAmount}
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap text-right font-mono text-xs font-semibold ${booking.dueAmount > 0 ? 'text-rose-450' : 'text-slate-500'}`}>
+                      ₹{booking.dueAmount}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-indigo-400 font-mono">
+                      {formatDate(booking.startDate)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-indigo-400 font-mono">
+                      {formatDate(booking.endDate)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
@@ -397,84 +409,11 @@ const SearchDashboard = () => {
                           : booking.status === 'Partial Payment'
                           ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
                           : booking.status === 'Payment Done'
-                          ? 'bg-[#00A89E] text-white border-[#00A89E]'
+                          ? 'bg-[#00A89E] text-[#00A89E] border-[#00A89E]/20'
                           : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                       }`}>
                         {booking.status || 'Pending'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-0.5">
-                        <span className="font-semibold text-slate-100">{booking.travellerName}</span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1">
-                          <Mail className="w-3.5 h-3.5 text-slate-650" /> {booking.travellerEmail}
-                        </span>
-                        <span className="text-xs text-slate-500 flex items-center gap-1">
-                          <Phone className="w-3.5 h-3.5 text-slate-650" /> {booking.travellerPhone}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-0.5">
-                        <span className="font-medium text-slate-100 flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5 text-indigo-600" /> {booking.packageName}
-                        </span>
-                        <span className="text-xs text-slate-400">{booking.location}</span>
-                        <span className="text-xs text-indigo-400 font-mono">
-                          {formatDate(booking.startDate)} - {formatDate(booking.endDate)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col text-xs font-mono">
-                        <span className="text-slate-400">Total: <strong className="text-slate-200">₹{booking.totalAmount}</strong></span>
-                        <span className="text-emerald-400">Paid: <strong>₹{booking.paidAmount}</strong></span>
-                        <span className={`${booking.dueAmount > 0 ? 'text-rose-450' : 'text-slate-500'}`}>
-                          Due: <strong>₹{booking.dueAmount}</strong>
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col space-y-1">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/50 w-max">
-                          TXN: {booking.transactionId}
-                        </span>
-                        {booking.dueAmount === 0 ? (
-                          <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full w-max">
-                            Fully Paid
-                          </span>
-                        ) : booking.paidAmount > 0 ? (
-                          <span className="text-[10px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full w-max">
-                            Partial Pay
-                          </span>
-                        ) : (
-                          <span className="text-[10px] uppercase font-bold text-rose-450 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full w-max">
-                            Unpaid
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    {user?.role === 'admin' && (
-                      <td className="px-6 py-4 whitespace-nowrap text-slate-305">
-                        <div className="flex flex-col text-xs">
-                          <span className="font-semibold">{booking.createdBy?.name || 'Deleted'}</span>
-                          <span className="text-slate-500">{booking.createdBy?.email}</span>
-                        </div>
-                      </td>
-                    )}
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handleViewScreenshot(booking.bookingId, booking._id)}
-                        disabled={fetchingScreenshotId === booking._id}
-                        className="inline-flex items-center space-x-1 py-1.5 px-3 rounded-lg bg-slate-850 text-slate-600 hover:bg-slate-800 hover:text-slate-100 border border-slate-800 text-xs font-semibold transition-all duration-200 cursor-pointer disabled:opacity-50"
-                      >
-                        {fetchingScreenshotId === booking._id ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Eye className="w-3.5 h-3.5" />
-                        )}
-                        <span>{fetchingScreenshotId === booking._id ? 'Loading...' : 'View'}</span>
-                      </button>
                     </td>
                   </tr>
                 ))}
