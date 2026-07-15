@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const { protect, verifiedOnly, adminOnly } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const upload = require('../middleware/multerConfig');
 
 // @desc    Create a new booking
 // @route   POST /api/bookings
@@ -37,8 +37,8 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       return res.status(400).json({ success: false, message: 'Please upload a transaction screenshot' });
     }
 
-    // Convert file buffer from memory storage to a Base64 data URL
-    const screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    // Cloudinary secure URL is stored in req.file.path
+    const screenshotPath = req.file.path;
 
     // Create booking
     const booking = new Booking({
@@ -70,7 +70,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       status: 'VERIFICATION-REQUIRED',
       addedBy: req.user.name || 'Agent',
       attachment: screenshotPath,
-      attachmentName: 'screenshot.jpg',
+      attachmentName: req.file.originalname,
       details: transactionId,
       verified: false,
       invoiceNumber: `INV-${booking.bookingId}`
@@ -197,6 +197,59 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     });
   } catch (error) {
     console.error('Search bookings error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Get all bookings that have payments in 'VERIFICATION-REQUIRED' status (Admin only)
+// @route   GET /api/bookings/pending-payments
+// @access  Private & Admin
+router.get('/pending-payments', protect, adminOnly, async (req, res) => {
+  try {
+    const bookings = await Booking.find({ 'payments.status': 'VERIFICATION-REQUIRED' })
+      .select('bookingId travellerName travellerEmail travellerPhone packageName location payments')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Extract all payments that are pending verification
+    let pendingPayments = [];
+    bookings.forEach(booking => {
+      booking.payments.forEach(payment => {
+        if (payment.status === 'VERIFICATION-REQUIRED') {
+          pendingPayments.push({
+            bookingObjectId: booking._id,
+            bookingId: booking.bookingId,
+            travellerName: booking.travellerName,
+            packageName: booking.packageName,
+            location: booking.location,
+            paymentId: payment.paymentId || payment._id,
+            _id: payment._id,
+            paymentDate: payment.paymentDate,
+            paymentFrom: payment.paymentFrom,
+            paymentTo: payment.paymentTo,
+            amountPaid: payment.amountPaid,
+            paymentMode: payment.paymentMode,
+            status: payment.status,
+            addedBy: payment.addedBy,
+            attachment: payment.attachment,
+            attachmentName: payment.attachmentName,
+            details: payment.details
+          });
+        }
+      });
+    });
+
+    // Sort by payment date descending
+    pendingPayments.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
+
+    res.json({
+      success: true,
+      count: pendingPayments.length,
+      data: pendingPayments,
+    });
+  } catch (error) {
+    console.error('Get pending payments error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -448,7 +501,7 @@ router.patch('/:id/comment', protect, verifiedOnly, upload.single('file'), async
     let fileType = '';
 
     if (req.file) {
-      fileUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      fileUrl = req.file.path;
       fileName = req.file.originalname;
       fileType = req.file.mimetype;
     }
@@ -540,7 +593,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
 
     // Handle optional screenshot upload
     if (req.file) {
-      booking.screenshot = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      booking.screenshot = req.file.path;
     }
 
     await booking.save();
@@ -603,7 +656,7 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
 
     let screenshotPath = '';
     if (req.file) {
-      screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      screenshotPath = req.file.path;
     }
 
     const newPaymentId = `${100000 + Math.floor(Math.random() * 900000)}`;
@@ -708,8 +761,8 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     if (attachmentName) payment.attachmentName = attachmentName;
 
     if (req.file) {
-      const screenshotPath = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-      payment.attachment = screenshotPath;
+      payment.attachment = req.file.path;
+      payment.attachmentName = req.file.originalname;
     }
 
     await booking.save();

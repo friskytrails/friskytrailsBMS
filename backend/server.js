@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static uploaded screenshots
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static('uploads'));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -34,6 +34,10 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
+  
+  if (err.message === 'Only PNG, JPG, and PDF are allowed.') {
+    return res.status(400).json({ success: false, message: err.message });
+  }
   
   if (err instanceof require('multer').MulterError) {
     return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });

@@ -13,7 +13,8 @@ import {
   RefreshCw,
   FolderOpen,
   CalendarDays,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 
 const SearchDashboard = () => {
@@ -437,11 +438,26 @@ const SearchDashboard = () => {
               </button>
             </div>
             <div className="p-6 flex justify-center bg-slate-955 max-h-[70vh] overflow-y-auto">
-              <img
-                src={selectedScreenshot && selectedScreenshot.startsWith('data:') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
-                alt="Payment Transaction Receipt"
-                className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
-              />
+              {selectedScreenshot && (selectedScreenshot.endsWith('.pdf') || selectedScreenshot.startsWith('data:application/pdf')) ? (
+                <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                  <FileText className="w-16 h-16 text-indigo-400" />
+                  <p className="text-sm text-slate-300 font-sans">PDF Document</p>
+                  <a
+                    href={selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+                  >
+                    Open PDF in New Tab
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={selectedScreenshot && (selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http')) ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                  alt="Payment Transaction Receipt"
+                  className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
+                />
+              )}
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Users,
@@ -16,7 +17,9 @@ import {
   MapPin,
   CheckCircle,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  FileText,
+  CreditCard
 } from 'lucide-react';
 import { API_BASE } from '../config';
 
@@ -36,6 +39,12 @@ const AdminDashboard = () => {
   const [bookingsError, setBookingsError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const [fetchingScreenshotId, setFetchingScreenshotId] = useState(null);
+
+  // State for Payments Tab
+  const [pendingPayments, setPendingPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [paymentsError, setPaymentsError] = useState('');
+  const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
 
   const handleViewScreenshot = async (bookingId, bookingObjectId) => {
     setFetchingScreenshotId(bookingObjectId);
@@ -104,9 +113,31 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchPendingPayments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/pending-payments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingPayments(data.data);
+      } else {
+        setPaymentsError(data.message || 'Failed to load pending payments');
+      }
+    } catch (err) {
+      console.error('Error fetching pending payments:', err);
+      setPaymentsError('Connection to server failed');
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPendingBookings();
+    fetchPendingPayments();
   }, [token]);
 
   const triggerToggleConfirm = (userItem) => {
@@ -164,6 +195,7 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingBookings((prev) => prev.filter((b) => b._id !== bookingId));
+        setSuccessModal({ isOpen: true, message: 'Booking confirmed successfully!' });
       } else {
         alert(data.message || 'Failed to confirm booking');
       }
@@ -185,11 +217,62 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingBookings((prev) => prev.filter((b) => b._id !== bookingId));
+        setSuccessModal({ isOpen: true, message: 'Booking rejected successfully!' });
       } else {
         alert(data.message || 'Failed to reject booking');
       }
     } catch (err) {
       console.error('Error rejecting booking:', err);
+      alert('Server connection failed');
+    }
+  };
+
+  // Verify payment action
+  const handleVerifyPayment = async (bookingObjectId, paymentId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'VERIFIED' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
+        setSuccessModal({ isOpen: true, message: 'Payment verified successfully!' });
+      } else {
+        alert(data.message || 'Failed to verify payment');
+      }
+    } catch (err) {
+      console.error('Error verifying payment:', err);
+      alert('Server connection failed');
+    }
+  };
+
+  // Reject payment action
+  const handleRejectPayment = async (bookingObjectId, paymentId) => {
+    const reason = prompt('Please enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'REJECTED', reason: reason || 'Rejected by Admin' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
+        setSuccessModal({ isOpen: true, message: 'Payment rejected successfully!' });
+      } else {
+        alert(data.message || 'Failed to reject payment');
+      }
+    } catch (err) {
+      console.error('Error rejecting payment:', err);
       alert('Server connection failed');
     }
   };
@@ -209,7 +292,7 @@ const AdminDashboard = () => {
     });
   };
 
-  if (usersLoading && bookingsLoading) {
+  if (usersLoading && bookingsLoading && paymentsLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
         <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -302,6 +385,18 @@ const AdminDashboard = () => {
           >
             <Clock className="w-4 h-4" />
             <span>Pending Bookings ({pendingBookings.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('payments')}
+            className={`flex items-center space-x-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'payments'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-650/15'
+                : 'text-slate-400 hover:text-slate-205 hover:bg-slate-850/50'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Pending Payments ({pendingPayments.length})</span>
           </button>
         </div>
 
@@ -404,7 +499,7 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'bookings' ? (
           <div>
             {bookingsError && (
               <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-center space-x-2 text-sm">
@@ -523,6 +618,133 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+        ) : (
+          <div>
+            {paymentsError && (
+              <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-center space-x-2 text-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{paymentsError}</span>
+              </div>
+            )}
+
+            {/* Pending Payments Listing */}
+            {pendingPayments.length === 0 ? (
+              <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-16 text-center shadow-inner flex flex-col items-center justify-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-500">
+                  <CheckCircle className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-305">All Verified!</h3>
+                <p className="text-sm text-slate-500 max-w-sm">
+                  There are no manual payments awaiting verification.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden shadow-xl animate-fadeIn">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+                    <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">Booking ID</th>
+                        <th className="px-6 py-4">Traveller & Trip</th>
+                        <th className="px-6 py-4">Amount Paid</th>
+                        <th className="px-6 py-4">Mode</th>
+                        <th className="px-6 py-4">From & To</th>
+                        <th className="px-6 py-4">Added By / Details</th>
+                        <th className="px-6 py-4 text-center">Receipt</th>
+                        <th className="px-6 py-4 text-center">Review Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60 bg-slate-950/20">
+                      {pendingPayments.map((p) => {
+                        const fileUrl = p.attachment
+                          ? (p.attachment.startsWith('data:') || p.attachment.startsWith('http')
+                              ? p.attachment
+                              : `${API_BASE}/${p.attachment}`)
+                          : null;
+                        return (
+                          <tr key={p.paymentId || p._id} className="hover:bg-slate-900/25 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap font-bold text-indigo-400 font-mono">
+                              <Link to={`/booking/${p.bookingId}`} className="hover:underline text-indigo-400">
+                                {p.bookingId}
+                              </Link>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col space-y-0.5">
+                                <span className="font-semibold text-slate-100">{p.travellerName}</span>
+                                <span className="text-xs text-slate-500 flex items-center gap-1">
+                                  <MapPin className="w-3.5 h-3.5 text-indigo-650" /> {p.packageName}
+                                </span>
+                                <span className="text-[10px] text-slate-450">{p.location}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 font-mono font-extrabold text-slate-100 whitespace-nowrap">
+                              ₹{p.amountPaid.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="text-xs font-semibold text-indigo-400 uppercase bg-indigo-500/5 px-2 py-0.5 rounded border border-indigo-500/10">
+                                {p.paymentMode}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-300">
+                              <span className="font-semibold text-slate-400">{p.paymentFrom}</span>
+                              <span className="text-slate-650 mx-1.5">→</span>
+                              <span className="font-semibold text-slate-400">{p.paymentTo}</span>
+                            </td>
+                            <td className="px-6 py-4 text-xs">
+                              <div className="flex flex-col">
+                                <span className="text-slate-300 font-medium">{p.addedBy}</span>
+                                <span className="text-slate-500 font-mono text-[10px] mt-0.5 truncate max-w-[120px]" title={p.details}>
+                                  {p.details || '—'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              {fileUrl ? (
+                                <button
+                                  onClick={() => setSelectedScreenshot(p.attachment)}
+                                  className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 text-xs font-semibold transition-all cursor-pointer"
+                                >
+                                  {p.attachment.endsWith('.pdf') || p.attachment.startsWith('data:application/pdf') ? (
+                                    <FileText className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Eye className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>View</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-600">—</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <div className="flex items-center justify-center space-x-2">
+                                <button
+                                  onClick={() => handleVerifyPayment(p.bookingObjectId, p.paymentId)}
+                                  className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 text-xs font-bold transition-all cursor-pointer"
+                                  title="Approve Payment"
+                                >
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  <span>Verify</span>
+                                </button>
+                                
+                                <button
+                                  onClick={() => handleRejectPayment(p.bookingObjectId, p.paymentId)}
+                                  className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-rose-500/10 text-rose-455 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all cursor-pointer"
+                                  title="Reject Payment"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  <span>Reject</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
       </div>
@@ -574,12 +796,47 @@ const AdminDashboard = () => {
               </button>
             </div>
             <div className="p-6 flex justify-center bg-slate-955 max-h-[70vh] overflow-y-auto">
-              <img
-                src={selectedScreenshot && selectedScreenshot.startsWith('data:') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
-                alt="Payment Transaction Receipt"
-                className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
-              />
+              {selectedScreenshot && (selectedScreenshot.endsWith('.pdf') || selectedScreenshot.startsWith('data:application/pdf')) ? (
+                <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                  <FileText className="w-16 h-16 text-indigo-400" />
+                  <p className="text-sm text-slate-300 font-sans">PDF Document</p>
+                  <a
+                    href={selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http') ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+                  >
+                    Open PDF in New Tab
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={selectedScreenshot && (selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http')) ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                  alt="Payment Transaction Receipt"
+                  className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
+                />
+              )}
             </div>
+          </div>
+        </div>
+      )}
+      {/* Success Modal */}
+      {successModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl overflow-hidden shadow-2xl p-6 animate-scaleUp text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-450 mb-4 animate-bounce">
+              <CheckCircle className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-100 mb-2">Action Successful</h3>
+            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+              {successModal.message}
+            </p>
+            <button
+              onClick={() => setSuccessModal({ isOpen: false, message: '' })}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-slate-100 font-bold rounded-xl text-sm transition-all shadow-md cursor-pointer"
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}
