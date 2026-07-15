@@ -105,7 +105,7 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .select('-screenshot')
+      .select('-screenshot -comments -payments')
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
       .sort({ createdAt: -1 })
@@ -184,7 +184,7 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookings = await Booking.find(query)
-      .select('-screenshot')
+      .select('-screenshot -comments -payments')
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
       .sort({ createdAt: -1 })
@@ -207,7 +207,7 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
 router.get('/pending', protect, adminOnly, async (req, res) => {
   try {
     const bookings = await Booking.find({ status: 'Pending' })
-      .select('-screenshot')
+      .select('-screenshot -comments -payments')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .lean();

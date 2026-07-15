@@ -333,5 +333,8 @@ BookingSchema.index({ travellerPhone: 1 });
 BookingSchema.index({ location: 1 });
 BookingSchema.index({ createdAt: -1 });
 BookingSchema.index({ startDate: 1 });
+BookingSchema.index({ createdBy: 1 });
+BookingSchema.index({ assignedTo: 1 });
+BookingSchema.index({ status: 1 });
 
 module.exports = mongoose.model('Booking', BookingSchema);
