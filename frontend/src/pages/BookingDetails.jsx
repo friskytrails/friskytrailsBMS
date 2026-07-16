@@ -74,14 +74,7 @@ const BookingDetails = () => {
   const [isEditingPackage, setIsEditingPackage] = useState(false);
   const [packageFields, setPackageFields] = useState({ packageName: '', location: '' });
 
-  const [isEditingTraveler, setIsEditingTraveler] = useState(false);
-  const [travelerFields, setTravelerFields] = useState({
-    travellerName: '',
-    travellerEmail: '',
-    travellerPhone: '',
-    adults: 0,
-    children: 0,
-  });
+
 
   const [isEditingServices, setIsEditingServices] = useState(false);
   const [servicesFields, setServicesFields] = useState({ startDate: '', endDate: '' });
@@ -92,7 +85,7 @@ const BookingDetails = () => {
 
   // Payment Form States
   const [formAmountPaid, setFormAmountPaid] = useState('');
-  const [formPaymentMode, setFormPaymentMode] = useState('upi');
+  const [formPaymentMode, setFormPaymentMode] = useState('Kalpana BOI');
   const [formPaymentDate, setFormPaymentDate] = useState('');
   const [formPaymentFrom, setFormPaymentFrom] = useState('TRAVELER');
   const [formPaymentTo, setFormPaymentTo] = useState('COMPANY');
@@ -322,20 +315,7 @@ const BookingDetails = () => {
     handleSaveBookingFields(packageFields, () => setIsEditingPackage(false));
   };
 
-  const startEditingTraveler = () => {
-    setTravelerFields({
-      travellerName: booking.travellerName,
-      travellerEmail: booking.travellerEmail,
-      travellerPhone: booking.travellerPhone,
-      adults: booking.adults || 0,
-      children: booking.children || 0,
-    });
-    setIsEditingTraveler(true);
-  };
 
-  const handleSaveTraveler = () => {
-    handleSaveBookingFields(travelerFields, () => setIsEditingTraveler(false));
-  };
 
   const startEditingServices = () => {
     setServicesFields({
@@ -409,7 +389,7 @@ const BookingDetails = () => {
   const openAddPaymentModal = () => {
     setEditingPayment(null);
     setFormAmountPaid('');
-    setFormPaymentMode('upi');
+    setFormPaymentMode('Kalpana BOI');
     setFormPaymentDate(new Date().toISOString().split('T')[0]);
     setFormPaymentFrom('TRAVELER');
     setFormPaymentTo('COMPANY');
@@ -784,10 +764,9 @@ const BookingDetails = () => {
 
   // Tabs structure
   const tabs = [
-    { id: 'overview', name: 'BOOKING OVERVIEW' },
-    { id: 'traveler', name: 'TRAVELER DETAILS' },
-    { id: 'payments', name: 'PAYMENTS & RECEIPTS' },
-    { id: 'comments', name: 'COMMENTS & UPDATES' }
+    { id: 'overview', name: 'BOOKING SNAPSHOT' },
+    { id: 'payments', name: 'BILLING & PAYMENTS' },
+    { id: 'comments', name: 'FOLLOW-UP HISTORY' }
   ];
 
   return (
@@ -864,11 +843,23 @@ const BookingDetails = () => {
         </div>
 
         {/* Secondary Info Bar (Horizontal) */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
           <div>
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Traveller Name</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
               {booking.travellerName}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Email Address</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
+              {booking.travellerEmail || '—'}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
+              {booking.travellerPhone || '—'}
             </div>
           </div>
           <div>
@@ -1272,136 +1263,7 @@ const BookingDetails = () => {
             </div>
           )}
 
-          {/* TAB 2: TRAVELER DETAILS */}
-          {activeTab === 'traveler' && (
-            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-lg shadow-sm space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-base font-extrabold uppercase tracking-wider text-slate-300">Traveller Information</h3>
 
-                {/* Localized Edit Trigger for Traveler Info */}
-                <div className="flex items-center gap-2">
-                  {isEditingTraveler ? (
-                    <>
-                      <button
-                        onClick={handleSaveTraveler}
-                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase transition-colors"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setIsEditingTraveler(false)}
-                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-bold uppercase transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    canEdit && (
-                      <button
-                        onClick={startEditingTraveler}
-                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Full Name</label>
-                  {isEditingTraveler ? (
-                    <input
-                      type="text"
-                      value={travelerFields.travellerName}
-                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerName: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
-                    />
-                  ) : (
-                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
-                      {booking.travellerName}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Email Address</label>
-                  {isEditingTraveler ? (
-                    <input
-                      type="email"
-                      value={travelerFields.travellerEmail}
-                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerEmail: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
-                    />
-                  ) : (
-                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-1.5 font-mono shadow-inner">
-                      <Mail className="w-4 h-4 text-slate-500" />
-                      <span>{booking.travellerEmail}</span>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs md:text-sm font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Phone Number</label>
-                  {isEditingTraveler ? (
-                    <input
-                      type="text"
-                      value={travelerFields.travellerPhone}
-                      onChange={(e) => setTravelerFields({ ...travelerFields, travellerPhone: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm md:text-base focus:outline-none transition-colors"
-                    />
-                  ) : (
-                    <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold flex items-center gap-1.5 shadow-inner">
-                      <Phone className="w-4 h-4 text-slate-500" />
-                      <span>{booking.travellerPhone}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Adults & Children Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-slate-850">
-                <div className="flex items-center space-x-4 bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-inner">
-                  <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                    <User className="w-6 h-6" />
-                  </div>
-                  <div className="flex-grow">
-                    <p className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-0.5">Adults</p>
-                    {isEditingTraveler ? (
-                      <input
-                        type="number"
-                        min="0"
-                        value={travelerFields.adults}
-                        onChange={(e) => setTravelerFields({ ...travelerFields, adults: Number(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3 py-1 text-slate-100 text-sm focus:outline-none"
-                      />
-                    ) : (
-                      <p className="text-sm md:text-base font-bold text-slate-100">{booking.adults || 0} Adults</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4 bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-inner">
-                  <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                    <Users className="w-6 h-6" />
-                  </div>
-                  <div className="flex-grow">
-                    <p className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-0.5">Children</p>
-                    {isEditingTraveler ? (
-                      <input
-                        type="number"
-                        min="0"
-                        value={travelerFields.children}
-                        onChange={(e) => setTravelerFields({ ...travelerFields, children: Number(e.target.value) })}
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-3 py-1 text-slate-100 text-sm focus:outline-none"
-                      />
-                    ) : (
-                      <p className="text-sm md:text-base font-bold text-slate-100">{booking.children || 0} Children</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* TAB 3: PAYMENTS & RECEIPTS (Replicating exact layout of Screenshot 2) */}
           {activeTab === 'payments' && (
@@ -1542,7 +1404,7 @@ const BookingDetails = () => {
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex flex-col md:flex-row items-center justify-center gap-1.5">
-                                {canEdit && (
+                                {user?.role === 'admin' && (
                                   <button
                                     onClick={() => openEditPayment(p)}
                                     className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
@@ -1690,11 +1552,12 @@ const BookingDetails = () => {
                   className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none transition-colors"
                 >
                   <option value="" disabled>Payment Mode</option>
-                  <option value="upi">upi</option>
-                  <option value="cash">cash</option>
-                  <option value="bank transfer">bank transfer</option>
-                  <option value="credit card">credit card</option>
-                  <option value="wallet">wallet</option>
+                  <option value="Kalpana BOI">Kalpana BOI</option>
+                  <option value="Kalpana PNB">Kalpana PNB</option>
+                  <option value="Babita AU">Babita AU</option>
+                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                  <option value="FT HDFC">FT HDFC</option>
+                  <option value="Pratyush SBI">Pratyush SBI</option>
                 </select>
               </div>
 

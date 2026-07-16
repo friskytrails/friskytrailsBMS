@@ -562,11 +562,24 @@ const AdminDashboard = () => {
                               </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 font-mono text-xs">
-                            <div className="flex flex-col">
-                              <span className="text-slate-400">Total: <strong className="text-slate-200">₹{booking.totalAmount}</strong></span>
-                              <span className="text-emerald-405">Paid: <strong>₹{booking.paidAmount}</strong></span>
-                              <span className="text-rose-455">Due: <strong>₹{booking.dueAmount}</strong></span>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex flex-col gap-1.5 max-w-[125px]">
+                              <span className="inline-flex items-center justify-between font-mono text-[11px] font-bold text-orange-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded shadow-sm">
+                                <span className="text-[9px] uppercase font-sans text-slate-500 mr-2">Total</span>
+                                <span>₹{booking.totalAmount}</span>
+                              </span>
+                              <span className="inline-flex items-center justify-between font-mono text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded shadow-sm">
+                                <span className="text-[9px] uppercase font-sans text-slate-500 mr-2">Paid</span>
+                                <span>₹{booking.paidAmount}</span>
+                              </span>
+                              <span className={`inline-flex items-center justify-between font-mono text-[11px] font-bold px-2.5 py-1 rounded border shadow-sm ${
+                                booking.dueAmount > 0 
+                                  ? 'text-rose-500 bg-rose-500/10 border-rose-500/20' 
+                                  : 'text-slate-400 bg-slate-800/40 border border-slate-700/30'
+                              }`}>
+                                <span className="text-[9px] uppercase font-sans text-slate-500 mr-2">Due</span>
+                                <span>₹{booking.dueAmount}</span>
+                              </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-300">

@@ -156,7 +156,7 @@ const SearchDashboard = () => {
               <input
                 type="text"
                 name="bookingId"
-                placeholder="BK-XXXXXX"
+                placeholder="FTXXXXXX"
                 value={filters.bookingId}
                 onChange={handleInputChange}
                 className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
@@ -171,7 +171,7 @@ const SearchDashboard = () => {
               <input
                 type="text"
                 name="paymentId"
-                placeholder="PAY-XXXXXX"
+                placeholder="123456"
                 value={filters.paymentId}
                 onChange={handleInputChange}
                 className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
@@ -359,9 +359,9 @@ const SearchDashboard = () => {
                   <th className="px-6 py-4">Booking ID</th>
                   <th className="px-6 py-4">Booking Date</th>
                   <th className="px-6 py-4">Client Name</th>
-                  <th className="px-6 py-4 text-right">Total Amount</th>
-                  <th className="px-6 py-4 text-right">Paid Amount</th>
-                  <th className="px-6 py-4 text-right">Due Amount</th>
+                  <th className="px-6 py-4 text-center">Total Amount</th>
+                  <th className="px-6 py-4 text-center">Paid Amount</th>
+                  <th className="px-6 py-4 text-center">Due Amount</th>
                   <th className="px-6 py-4">Start Date</th>
                   <th className="px-6 py-4">End Date</th>
                   <th className="px-6 py-4">Trip Status</th>
@@ -384,14 +384,24 @@ const SearchDashboard = () => {
                     <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-100">
                       {booking.travellerName}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-xs text-slate-200">
-                      ₹{booking.totalAmount}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className="inline-flex items-center justify-center font-mono font-bold text-orange-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg shadow-sm">
+                        ₹{booking.totalAmount}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-xs text-emerald-400 font-semibold">
-                      ₹{booking.paidAmount}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className="inline-flex items-center justify-center font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg shadow-sm">
+                        ₹{booking.paidAmount}
+                      </span>
                     </td>
-                    <td className={`px-6 py-4 whitespace-nowrap text-right font-mono text-xs font-semibold ${booking.dueAmount > 0 ? 'text-rose-450' : 'text-slate-500'}`}>
-                      ₹{booking.dueAmount}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className={`inline-flex items-center justify-center font-mono font-bold px-3 py-1.5 rounded-lg border shadow-sm ${
+                        booking.dueAmount > 0 
+                          ? 'text-rose-500 bg-rose-500/10 border-rose-500/20' 
+                          : 'text-slate-400 bg-slate-800/40 border border-slate-700/30'
+                      }`}>
+                        ₹{booking.dueAmount}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-indigo-400 font-mono">
                       {formatDate(booking.startDate)}

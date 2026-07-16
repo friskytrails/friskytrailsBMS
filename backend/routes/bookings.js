@@ -716,13 +716,11 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check: Admin, Creator, or Assigned Employee
-    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
-    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    // Permission check: Admin only
     const isAdmin = req.user.role === 'admin';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
-      return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to edit payments for this booking.' });
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Access denied: Only admins are authorized to edit payments.' });
     }
 
     const { paymentId } = req.params;

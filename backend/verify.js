@@ -102,12 +102,12 @@ const runTests = async () => {
 
     await booking.save();
     console.log('✓ Test Booking saved.');
-    console.log(`  - Booking ID: ${booking.bookingId} (Expected: auto-generated unique string BK-XXXXXX)`);
+    console.log(`  - Booking ID: ${booking.bookingId} (Expected: auto-generated unique string FTXXXXXX)`);
     console.log(`  - Total Amount: ${booking.totalAmount}`);
     console.log(`  - Initial Paid Amount (Unverified): ${booking.paidAmount} (Expected: 0)`);
     console.log(`  - Initial Due Amount (Unverified): ${booking.dueAmount} (Expected: 1500)`);
 
-    if (!booking.bookingId || !booking.bookingId.startsWith('BK-')) {
+    if (!booking.bookingId || !booking.bookingId.startsWith('FT')) {
       throw new Error(`Booking ID format is invalid: ${booking.bookingId}`);
     }
 
