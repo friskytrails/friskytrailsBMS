@@ -229,7 +229,7 @@ function ensureInitialPayment(doc) {
     if (initialAmount > 0) {
       const isPaid = doc.status === 'Payment Done' || doc.status === 'Confirmed';
       const initialPayment = {
-        paymentId: doc.paymentId || `PAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        paymentId: doc.paymentId || `${Math.floor(100000 + Math.random() * 900000)}`,
         paymentDate: doc.createdAt || new Date(),
         paymentFrom: 'TRAVELER',
         paymentTo: 'COMPANY',
@@ -289,7 +289,7 @@ BookingSchema.pre('validate', async function (next) {
     let attempts = 0;
     while (!uniqueIdGenerated && attempts < 10) {
       const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const tempId = `BK-${randomPart}`;
+      const tempId = `FT${randomPart}`;
       
       // Check if it already exists
       const existingBooking = await mongoose.models.Booking.findOne({ bookingId: tempId });
@@ -306,8 +306,8 @@ BookingSchema.pre('validate', async function (next) {
     let uniqueIdGenerated = false;
     let attempts = 0;
     while (!uniqueIdGenerated && attempts < 10) {
-      const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const tempId = `PAY-${randomPart}`;
+      const randomPart = Math.floor(100000 + Math.random() * 900000).toString();
+      const tempId = randomPart;
       
       // Check if it already exists
       const existingBooking = await mongoose.models.Booking.findOne({ paymentId: tempId });
