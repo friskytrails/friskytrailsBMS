@@ -10,8 +10,13 @@ router.get('/:mobileNumber', protect, verifiedOnly, async (req, res) => {
   try {
     const { mobileNumber } = req.params;
     
-    // Search for a matching lead in CRMDB
-    const lead = await Lead.findOne({ mobileNumber: mobileNumber }).lean();
+    // Search for a matching lead in CRMDB (checking both phone and mobileNumber fields)
+    const lead = await Lead.findOne({
+      $or: [
+        { phone: mobileNumber },
+        { mobileNumber: mobileNumber }
+      ]
+    }).lean();
     
     if (!lead) {
       return res.status(200).json({ success: false, message: 'Lead not found in CRM.' });
