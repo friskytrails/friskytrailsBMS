@@ -57,6 +57,12 @@ const BookingDetails = () => {
   const [error, setError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
+  // CRM Lead State
+  const [leadData, setLeadData] = useState(null);
+  const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const [leadLoading, setLeadLoading] = useState(false);
+  const [leadError, setLeadError] = useState('');
+
   // Tab State
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -176,6 +182,39 @@ const BookingDetails = () => {
 
     fetchEmployees();
   }, [user, token]);
+
+  // Fetch CRM Lead Data
+  const fetchLeadData = async (mobileNumber) => {
+    setLeadLoading(true);
+    setLeadError('');
+    setIsLeadModalOpen(true);
+    setLeadData(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/lead-details/${mobileNumber}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        setLeadError('Lead not found or server error.');
+        setLeadLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setLeadData(data.data);
+      } else {
+        setLeadError(data.message || 'Lead not found in CRM.');
+      }
+    } catch (err) {
+      console.error('Error fetching lead data:', err);
+      setLeadError('Network connection error.');
+    } finally {
+      setLeadLoading(false);
+    }
+  };
 
   // Add employee to assignedTo
   const handleAddEmployee = async (e) => {
@@ -823,6 +862,16 @@ const BookingDetails = () => {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap md:justify-end">
+            {booking.travellerPhone && (
+              <button
+                onClick={() => fetchLeadData(booking.travellerPhone)}
+                disabled={leadLoading}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 text-xs md:text-sm font-extrabold uppercase rounded-lg shadow transition-colors cursor-pointer"
+              >
+                <Users className="w-4 h-4" />
+                <span>View CRM Lead</span>
+              </button>
+            )}
             {canEdit && (
               <button
                 onClick={openFullEditModal}
@@ -1505,6 +1554,111 @@ const BookingDetails = () => {
       )}
 
       {/* 2. Manual Payment Entry Modal (Replicating exact layout of Screenshot 1) */}
+      {/* Lead Details Modal */}
+      {isLeadModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-slate-800">
+              <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
+                <Users className="w-6 h-6 text-indigo-500" />
+                CRM Lead Details
+              </h2>
+              <button
+                onClick={() => setIsLeadModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+              {leadLoading ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-3 text-slate-400 text-sm">Fetching Lead Data from CRM...</p>
+                </div>
+              ) : leadError ? (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-5 text-center">
+                  <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
+                  <p className="text-rose-400 font-medium">{leadError}</p>
+                </div>
+              ) : leadData ? (
+                <div className="space-y-6">
+                  {/* Key Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</span>
+                      <span className="text-slate-200 font-semibold">{leadData.fullName || '—'}</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mobile</span>
+                      <span className="text-slate-200 font-semibold">{leadData.mobileNumber || '—'}</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        leadData.status === 'New' ? 'bg-blue-500/10 text-blue-500' :
+                        leadData.status === 'Contacted' ? 'bg-amber-500/10 text-amber-500' :
+                        'bg-slate-800 text-slate-300'
+                      }`}>
+                        {leadData.status || '—'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source</span>
+                      <span className="text-slate-200 font-semibold">{leadData.leadSource || '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Fields */}
+                  {Object.keys(leadData).filter(key => !['fullName', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory'].includes(key)).length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Other Details</h3>
+                      <div className="bg-slate-950 border border-slate-800 rounded-lg divide-y divide-slate-800/50">
+                        {Object.entries(leadData).filter(([key]) => !['fullName', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory'].includes(key)).map(([key, value]) => (
+                          <div key={key} className="p-3 flex justify-between">
+                            <span className="text-slate-400 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                            <span className="text-slate-200 font-semibold text-right max-w-[60%] break-words">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Interaction History */}
+                  {leadData.interactionHistory && leadData.interactionHistory.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Interaction History</h3>
+                      <div className="space-y-3">
+                        {leadData.interactionHistory.map((item, idx) => (
+                          <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="text-xs font-bold text-indigo-400 uppercase">{item.type || 'Note'}</span>
+                              <span className="text-xs text-slate-500">{new Date(item.date || item.timestamp).toLocaleDateString()}</span>
+                            </div>
+                            <p className="text-sm text-slate-300">{item.notes || item.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsLeadModalOpen(false)}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isAddPaymentModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 text-slate-100 rounded-lg max-w-md w-full p-6 relative shadow-2xl animate-scaleUp">
