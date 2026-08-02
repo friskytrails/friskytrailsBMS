@@ -1584,59 +1584,157 @@ const BookingDetails = () => {
                 </div>
               ) : leadData ? (
                 <div className="space-y-6">
-                  {/* Key Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</span>
-                      <span className="text-slate-200 font-semibold">{leadData.fullName || '—'}</span>
+                  {/* Top Key Info Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Full Name</span>
+                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.name || leadData.fullName || '—'}</span>
                     </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mobile</span>
-                      <span className="text-slate-200 font-semibold">{leadData.mobileNumber || '—'}</span>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Phone Number</span>
+                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.phone || leadData.mobileNumber || '—'}</span>
                     </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Status</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        leadData.status === 'New' ? 'bg-blue-500/10 text-blue-500' :
-                        leadData.status === 'Contacted' ? 'bg-amber-500/10 text-amber-500' :
+                        leadData.status === 'New' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                        leadData.status === 'Contacted' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        leadData.status === 'Converted' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                         'bg-slate-800 text-slate-300'
                       }`}>
                         {leadData.status || '—'}
                       </span>
                     </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-                      <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Source</span>
-                      <span className="text-slate-200 font-semibold">{leadData.leadSource || '—'}</span>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Lead Source</span>
+                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.leadSource || '—'}</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Product / Tour</span>
+                      <span className="text-indigo-300 font-bold text-sm truncate block">{leadData.product || '—'}</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
+                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">CRM Lead ID</span>
+                      <span className="text-slate-400 font-semibold text-sm truncate block">#{leadData.leadId || leadData.id || '—'}</span>
                     </div>
                   </div>
 
-                  {/* Dynamic Fields */}
-                  {Object.keys(leadData).filter(key => !['fullName', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory'].includes(key)).length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Other Details</h3>
-                      <div className="bg-slate-950 border border-slate-800 rounded-lg divide-y divide-slate-800/50">
-                        {Object.entries(leadData).filter(([key]) => !['fullName', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory'].includes(key)).map(([key, value]) => (
-                          <div key={key} className="p-3 flex justify-between">
-                            <span className="text-slate-400 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                            <span className="text-slate-200 font-semibold text-right max-w-[60%] break-words">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                  {/* Trip Route & Schedule Section */}
+                  {(leadData.origin || leadData.destination || leadData.dates || (leadData.labels && leadData.labels.length > 0)) && (
+                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                      <h3 className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Trip & Route Details</span>
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Route</span>
+                          <span className="text-slate-200 font-semibold">
+                            {leadData.origin ? `${leadData.origin} → ${leadData.destination || ''}` : leadData.destination || '—'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Start Date</span>
+                          <span className="text-slate-200 font-semibold">
+                            {leadData.dates?.startDate ? formatDate(leadData.dates.startDate) : 'Not specified'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Due Date</span>
+                          <span className="text-slate-200 font-semibold">
+                            {leadData.dates?.dueDate ? formatDate(leadData.dates.dueDate) : 'Not specified'}
+                          </span>
+                        </div>
+                      </div>
+                      {leadData.labels && leadData.labels.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {leadData.labels.map((lbl, idx) => (
+                            <span key={idx} className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold px-2.5 py-0.5 rounded-md">
+                              {lbl}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Call & Engagement Metrics */}
+                  {leadData.booking && (
+                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4">
+                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                        <span>Call & Engagement Summary</span>
+                      </h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
+                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Total Dials</span>
+                          <span className="text-lg font-extrabold text-slate-200">{leadData.booking.totalDial || 0}</span>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
+                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Connected</span>
+                          <span className="text-lg font-extrabold text-emerald-400">{leadData.booking.connected || 0}</span>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
+                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Talk Time</span>
+                          <span className="text-lg font-extrabold text-indigo-400">{leadData.booking.talkTime || '0:0'}</span>
+                        </div>
+                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
+                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Last Call</span>
+                          <span className="text-xs font-bold text-slate-300 block mt-1 truncate">
+                            {leadData.booking.lastCall ? formatDate(leadData.booking.lastCall) : 'No calls yet'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CRM Notes / Interaction History */}
+                  {(leadData.notes?.length > 0 || leadData.interactionHistory?.length > 0) && (
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+                        CRM Notes & History ({leadData.notes?.length || leadData.interactionHistory?.length})
+                      </h3>
+                      <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                        {(leadData.notes || leadData.interactionHistory).map((item, idx) => (
+                          <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-bold text-indigo-400 flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                {item.author || item.type || 'CRM Note'}
+                              </span>
+                              <span className="text-slate-500 text-[11px] font-mono">
+                                {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-200 leading-relaxed break-words font-normal">
+                              {item.text || item.notes || item.message || '—'}
+                            </p>
+                            {item.imageUrl && (
+                              <a
+                                href={item.imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-block text-xs text-indigo-400 hover:underline pt-1"
+                              >
+                                View Attachment →
+                              </a>
+                            )}
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Interaction History */}
-                  {leadData.interactionHistory && leadData.interactionHistory.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Interaction History</h3>
-                      <div className="space-y-3">
-                        {leadData.interactionHistory.map((item, idx) => (
-                          <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-xs font-bold text-indigo-400 uppercase">{item.type || 'Note'}</span>
-                              <span className="text-xs text-slate-500">{new Date(item.date || item.timestamp).toLocaleDateString()}</span>
-                            </div>
-                            <p className="text-sm text-slate-300">{item.notes || item.message}</p>
+                  {/* Other Unstructured Details */}
+                  {Object.keys(leadData).filter(key => !['name', 'fullName', 'phone', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory', 'notes', 'booking', 'callLogs', 'dates', 'labels', 'agentIds', 'leadId', 'product', 'origin', 'destination', 'id'].includes(key)).length > 0 && (
+                    <div className="pt-2">
+                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">Other Info</h3>
+                      <div className="bg-slate-950 border border-slate-800 rounded-lg divide-y divide-slate-800/50 text-xs">
+                        {Object.entries(leadData).filter(([key]) => !['name', 'fullName', 'phone', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory', 'notes', 'booking', 'callLogs', 'dates', 'labels', 'agentIds', 'leadId', 'product', 'origin', 'destination', 'id'].includes(key)).map(([key, value]) => (
+                          <div key={key} className="p-2.5 flex justify-between items-center">
+                            <span className="text-slate-400 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                            <span className="text-slate-200 font-semibold text-right max-w-[65%] truncate">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                            </span>
                           </div>
                         ))}
                       </div>
