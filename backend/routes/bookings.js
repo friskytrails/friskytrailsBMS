@@ -17,6 +17,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       totalAmount,
       paidAmount,
       transactionId,
+      paymentMode,
       travellerName,
       travellerEmail,
       travellerPhone,
@@ -55,6 +56,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       travellerPhone,
       createdBy: req.user._id,
       status: 'Pending',
+      tripStatus: 'Pending',
       adults: Number(adults),
       children: Number(children),
     });
@@ -66,7 +68,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       paymentFrom: 'TRAVELER',
       paymentTo: 'COMPANY',
       amountPaid: Number(paidAmount),
-      paymentMode: 'upi',
+      paymentMode: paymentMode || 'Kalpana BOI',
       status: 'VERIFICATION-REQUIRED',
       addedBy: req.user.name || 'Agent',
       attachment: screenshotPath,
@@ -364,8 +366,8 @@ router.patch('/assign/:id', protect, adminOnly, async (req, res) => {
 // @access  Private & Verified
 router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
   try {
-    const { status } = req.body;
-    if (!status) {
+    const { status, tripStatus } = req.body;
+    if (!status && !tripStatus) {
       return res.status(400).json({ success: false, message: 'Status is required' });
     }
 
@@ -383,11 +385,18 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update this booking status.' });
     }
 
-    if (!['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    const bookingStatuses = ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
+    const tripStatuses = ['Pending', 'Cancelled', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'];
+
+    if (status && !bookingStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking status value' });
+    }
+    if (tripStatus && !tripStatuses.includes(tripStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid trip status value' });
     }
 
-    booking.status = status;
+    if (status) booking.status = status;
+    if (tripStatus) booking.tripStatus = tripStatus;
     await booking.save();
 
     const updatedBooking = await Booking.findById(booking._id)
@@ -562,12 +571,14 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       totalAmount,
       paidAmount,
       transactionId,
+      paymentMode,
       travellerName,
       travellerEmail,
       travellerPhone,
       adults,
       children,
       status,
+      tripStatus,
       profitMargin,
       feedbackRating,
       feedbackComment,
@@ -580,6 +591,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
     if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
     if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
     if (transactionId) booking.transactionId = transactionId;
+    if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
     if (travellerName) booking.travellerName = travellerName;
     if (travellerEmail) booking.travellerEmail = travellerEmail;
     if (travellerPhone) booking.travellerPhone = travellerPhone;
@@ -587,6 +599,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
     if (adults !== undefined) booking.adults = Number(adults);
     if (children !== undefined) booking.children = Number(children);
     if (status) booking.status = status;
+    if (tripStatus) booking.tripStatus = tripStatus;
     if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
     if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
     if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
@@ -821,6 +834,8 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       }
 
       if (status === 'VERIFIED' || action === 'approve') {
+        const wasBookingPending = booking.status === 'Pending';
+        const isFirstVerifiedPayment = !booking.payments.some(p => p.status === 'VERIFIED');
         payment.status = 'VERIFIED';
         payment.verified = true;
 
@@ -831,15 +846,24 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
         // Update booking status based on remaining due amount
-        if (booking.dueAmount <= 0) {
+        // Auto-confirm booking when verifying the first payment on a Pending booking
+        if (isFirstVerifiedPayment && wasBookingPending) {
+          booking.status = 'Confirmed';
+        } else if (isFirstVerifiedPayment) {
+          booking.status = 'Confirmed';
+        } else if (booking.dueAmount <= 0) {
           booking.status = 'Payment Done';
         } else {
           booking.status = 'Partial Payment';
         }
 
+        const autoConfirmedMsg = (isFirstVerifiedPayment && wasBookingPending)
+          ? ' Booking has been AUTO-CONFIRMED (first payment verified).'
+          : '';
+
         booking.comments.push({
           senderName: `System / ${req.user.name}`,
-          message: `Payment Approved: Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been APPROVED. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}.`,
+          message: `Payment Approved: Payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been APPROVED. Total Paid: ₹${booking.paidAmount}. Balance Due: ₹${booking.dueAmount}.${autoConfirmedMsg}`,
           timestamp: new Date()
         });
       } else if (status === 'REJECTED' || action === 'reject') {
@@ -868,9 +892,11 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       .populate('assignedTo', 'name email')
       .populate('comments.sender', 'name email role');
 
+    const wasAutoConfirmed = updatedBooking.status === 'Confirmed' && req.body.status === 'VERIFIED';
     res.json({
       success: true,
       message: action === 'send-receipt' ? 'Receipt email queued successfully' : 'Payment status updated',
+      autoConfirmed: wasAutoConfirmed,
       data: updatedBooking,
     });
   } catch (error) {

@@ -352,49 +352,50 @@ const SearchDashboard = () => {
 
       {searched && !loading && bookings.length > 0 && (
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
-              <thead className="bg-slate-900/80 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <div>
+            <table className="w-full divide-y divide-slate-800 text-left text-sm table-auto">
+              <thead className="bg-slate-900/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 <tr>
-                  <th className="px-6 py-4">Booking ID</th>
-                  <th className="px-6 py-4">Booking Date</th>
-                  <th className="px-6 py-4">Client Name</th>
-                  <th className="px-6 py-4 text-center">Total Amount</th>
-                  <th className="px-6 py-4 text-center">Paid Amount</th>
-                  <th className="px-6 py-4 text-center">Due Amount</th>
-                  <th className="px-6 py-4">Start Date</th>
-                  <th className="px-6 py-4">End Date</th>
-                  <th className="px-6 py-4">Trip Status</th>
+                  <th className="px-2.5 py-3">Booking ID</th>
+                  <th className="px-2.5 py-3">Booking Date</th>
+                  <th className="px-2.5 py-3">Client Name</th>
+                  <th className="px-2.5 py-3 text-center">Total</th>
+                  <th className="px-2.5 py-3 text-center">Paid</th>
+                  <th className="px-2.5 py-3 text-center">Due</th>
+                  <th className="px-2.5 py-3">Start Date</th>
+                  <th className="px-2.5 py-3">End Date</th>
+                  <th className="px-2.5 py-3">Booking Status</th>
+                  <th className="px-2.5 py-3">Trip Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 bg-slate-950/20">
                 {bookings.map((booking) => (
                   <tr key={booking._id} className="hover:bg-slate-900/25 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-2.5 py-3 whitespace-nowrap">
                       <Link to={`/booking/${booking.bookingId}`} className="font-bold text-indigo-600 font-mono hover:text-indigo-500 hover:underline">
                         {booking.bookingId}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-2.5 py-3 whitespace-nowrap">
                       <span className="text-xs text-slate-400 flex items-center gap-1">
                         <CalendarDays className="w-3.5 h-3.5 text-indigo-600" />
                         {formatDate(booking.createdAt)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-slate-100">
+                    <td className="px-2.5 py-3 whitespace-nowrap font-semibold text-slate-100">
                       {booking.travellerName}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <td className="px-2.5 py-3 whitespace-nowrap text-center">
                       <span className="inline-flex items-center justify-center font-mono font-bold text-orange-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg shadow-sm">
                         ₹{booking.totalAmount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <td className="px-2.5 py-3 whitespace-nowrap text-center">
                       <span className="inline-flex items-center justify-center font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg shadow-sm">
                         ₹{booking.paidAmount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <td className="px-2.5 py-3 whitespace-nowrap text-center">
                       <span className={`inline-flex items-center justify-center font-mono font-bold px-3 py-1.5 rounded-lg border shadow-sm ${
                         booking.dueAmount > 0 
                           ? 'text-rose-500 bg-rose-500/10 border-rose-500/20' 
@@ -403,13 +404,13 @@ const SearchDashboard = () => {
                         ₹{booking.dueAmount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-indigo-400 font-mono">
+                    <td className="px-2.5 py-3 whitespace-nowrap text-xs text-indigo-400 font-mono">
                       {formatDate(booking.startDate)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-indigo-400 font-mono">
+                    <td className="px-2.5 py-3 whitespace-nowrap text-xs text-indigo-400 font-mono">
                       {formatDate(booking.endDate)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-2.5 py-3 whitespace-nowrap">
                       <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
                         booking.status === 'Booked' || booking.status === 'Confirmed'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -420,10 +421,29 @@ const SearchDashboard = () => {
                           : booking.status === 'Partial Payment'
                           ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
                           : booking.status === 'Payment Done'
-                          ? 'bg-[#00A89E] text-[#00A89E] border-[#00A89E]/20'
+                          ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
                           : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                       }`}>
                         {booking.status || 'Pending'}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-3 whitespace-nowrap">
+                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
+                        booking.tripStatus === 'Cancelled'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : booking.tripStatus === 'Fulfillment Done'
+                          ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
+                          : booking.tripStatus === 'Trip Completed'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : booking.tripStatus === 'No Refund'
+                          ? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                          : booking.tripStatus === 'Refund Required'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : booking.tripStatus === 'Refund Done'
+                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      }`}>
+                        {booking.tripStatus || 'Pending'}
                       </span>
                     </td>
                   </tr>

@@ -146,9 +146,13 @@ const BookingSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Booking status is required'],
     enum: [
-      'Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done',
-      'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'
+      'Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'
     ],
+    default: 'Pending',
+  },
+  tripStatus: {
+    type: String,
+    enum: ['Pending', 'Cancelled', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'],
     default: 'Pending',
   },
   assignedTo: {
@@ -218,6 +222,7 @@ function ensureInitialPayment(doc) {
   const hasInitial = doc.payments.some(p => 
     p.invoiceNumber === `INV-${doc.bookingId}` || 
     p.details === 'Initial Booking Payment' ||
+    (doc.transactionId && p.details === doc.transactionId) ||
     p.addedBy === 'System Migrator'
   );
 

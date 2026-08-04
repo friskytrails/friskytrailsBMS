@@ -75,6 +75,7 @@ const BookingDetails = () => {
   const [employees, setEmployees] = useState([]);
   const [assigning, setAssigning] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [updatingTripStatus, setUpdatingTripStatus] = useState(false);
 
   // --- Inline Editing States ---
   const [isEditingPackage, setIsEditingPackage] = useState(false);
@@ -315,6 +316,34 @@ const BookingDetails = () => {
       alert('Failed to update status due to network error.');
     } finally {
       setUpdatingStatus(false);
+    }
+  };
+
+  const handleTripStatusChange = async (e) => {
+    const newTripStatus = e.target.value;
+    if (!newTripStatus || newTripStatus === booking.tripStatus) return;
+
+    setUpdatingTripStatus(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tripStatus: newTripStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooking(data.data);
+      } else {
+        alert(data.message || 'Failed to update trip status');
+      }
+    } catch (err) {
+      console.error('Error updating trip status:', err);
+      alert('Failed to update trip status due to network error.');
+    } finally {
+      setUpdatingTripStatus(false);
     }
   };
 
@@ -822,31 +851,24 @@ const BookingDetails = () => {
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-3.5 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap">
               {/* Left: Booking ID in a white badge */}
               <span className="bg-slate-900 text-slate-100 px-4 py-2 rounded-lg font-mono font-extrabold text-sm md:text-base shadow-sm border border-slate-800">
                 {booking.bookingId}
               </span>
 
-              {/* Center: Booking Status Dropdown */}
+              {/* Booking Status Dropdown */}
               {canEdit ? (
                 <div className="relative flex items-center">
                   <select
-                    value={booking.status || 'Pending'}
+                    value={booking.status === 'Cancelled' ? 'Cancelled' : 'Confirmed'}
                     onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
                     disabled={updatingStatus}
                     className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${getStatusStyles(booking.status)
                       }`}
                   >
-                    <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
-                    <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
-                    <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
-                    <option value="No Refund" className="bg-slate-900 text-slate-400">No Refund</option>
-                    <option value="Refund Required" className="bg-slate-900 text-rose-500">Refund Required</option>
-                    <option value="Refund Done" className="bg-slate-900 text-blue-500">Refund Done</option>
-                    {!['Pending', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'].includes(booking.status) && booking.status && (
-                      <option value={booking.status} className="bg-slate-900 text-slate-400">{booking.status} (Legacy)</option>
-                    )}
+                    <option value="Confirmed" className="bg-slate-900 text-emerald-500">Confirmed</option>
+                    <option value="Cancelled" className="bg-slate-900 text-rose-500">Reject</option>
                   </select>
                   {updatingStatus && (
                     <span className="ml-2 w-4 h-4 border-2 border-[#00A89E] border-t-transparent rounded-full animate-spin"></span>
@@ -856,6 +878,35 @@ const BookingDetails = () => {
                 <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.status)
                   }`}>
                   {booking.status}
+                </span>
+              )}
+
+              {/* Trip Status Dropdown */}
+              {canEdit ? (
+                <div className="relative flex items-center">
+                  <select
+                    value={booking.tripStatus || 'Pending'}
+                    onChange={handleTripStatusChange}
+                    disabled={updatingTripStatus}
+                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 bg-slate-900 transition-all ${getStatusStyles(booking.tripStatus || 'Pending')
+                      }`}
+                  >
+                    <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                    <option value="Cancelled" className="bg-slate-900 text-rose-500">Cancelled</option>
+                    <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
+                    <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
+                    <option value="No Refund" className="bg-slate-900 text-slate-400">No Refund</option>
+                    <option value="Refund Required" className="bg-slate-900 text-rose-500">Refund Required</option>
+                    <option value="Refund Done" className="bg-slate-900 text-blue-500">Refund Done</option>
+                  </select>
+                  {updatingTripStatus && (
+                    <span className="ml-2 w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+                  )}
+                </div>
+              ) : (
+                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.tripStatus || 'Pending')
+                  }`}>
+                  {booking.tripStatus || 'Pending'}
                 </span>
               )}
             </div>
