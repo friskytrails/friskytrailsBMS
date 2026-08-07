@@ -241,7 +241,14 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
-        setSuccessModal({ isOpen: true, message: 'Payment verified successfully!' });
+        // If booking was auto-confirmed (first payment verified on a Pending booking),
+        // remove it from pending bookings list as well
+        if (data.autoConfirmed) {
+          setPendingBookings(prev => prev.filter(b => b._id !== bookingObjectId));
+          setSuccessModal({ isOpen: true, message: 'Payment verified successfully! Booking has been auto-confirmed and removed from pending bookings.' });
+        } else {
+          setSuccessModal({ isOpen: true, message: 'Payment verified successfully!' });
+        }
       } else {
         alert(data.message || 'Failed to verify payment');
       }

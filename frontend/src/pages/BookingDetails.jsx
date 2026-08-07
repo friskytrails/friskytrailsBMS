@@ -857,16 +857,19 @@ const BookingDetails = () => {
                 {booking.bookingId}
               </span>
 
-              {/* Booking Status Dropdown */}
-              {canEdit ? (
+              {/* Booking Status Dropdown — Admin only */}
+              {isAdmin ? (
                 <div className="relative flex items-center">
                   <select
-                    value={booking.status === 'Cancelled' ? 'Cancelled' : 'Confirmed'}
+                    value={booking.status}
                     onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
                     disabled={updatingStatus}
                     className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${getStatusStyles(booking.status)
                       }`}
                   >
+                    {booking.status === 'Pending' && (
+                      <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                    )}
                     <option value="Confirmed" className="bg-slate-900 text-emerald-500">Confirmed</option>
                     <option value="Cancelled" className="bg-slate-900 text-rose-500">Reject</option>
                   </select>
@@ -923,7 +926,7 @@ const BookingDetails = () => {
                 <span>View CRM Lead</span>
               </button>
             )}
-            {canEdit && (
+            {isAdmin && (
               <button
                 onClick={openFullEditModal}
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs md:text-sm font-extrabold uppercase rounded-lg shadow transition-colors cursor-pointer"
@@ -1031,7 +1034,7 @@ const BookingDetails = () => {
                         </button>
                       </>
                     ) : (
-                      canEdit && (
+                      isAdmin && (
                         <button
                           onClick={startEditingPackage}
                           className="px-2.5 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-extrabold uppercase transition-colors inline-flex items-center gap-1"
@@ -1320,7 +1323,9 @@ const BookingDetails = () => {
                         <tbody className="divide-y divide-orange-100/20">
                           {(booking.tasks || []).map((task) => {
                             const isSystemTask = task.taskName === 'Booking Created' || task.taskName === 'Initial Payment Submitted';
-                            const isClickable = canEdit && !isSystemTask;
+                            // Employees cannot un-toggle completed tasks (one-way check)
+                            const isEmployeeLockedOut = !isAdmin && task.isCompleted;
+                            const isClickable = canEdit && !isSystemTask && !isEmployeeLockedOut;
 
                             return (
                               <tr key={task._id || task.taskName} className="text-xs text-[#1A1A1A] hover:bg-orange-50/30 transition-colors">
@@ -1331,7 +1336,7 @@ const BookingDetails = () => {
                                     onClick={() => handleToggleTask(task.taskName)}
                                     className={`inline-flex items-center justify-center p-1 rounded-md transition-all ${isClickable ? 'cursor-pointer hover:bg-orange-100/40' : 'cursor-not-allowed opacity-85'
                                       }`}
-                                    title={isSystemTask ? "System log cannot be changed" : !canEdit ? "No permission to edit" : "Toggle task completion"}
+                                    title={isSystemTask ? "System log cannot be changed" : isEmployeeLockedOut ? "Completed tasks cannot be unchecked" : !canEdit ? "No permission to edit" : "Toggle task completion"}
                                   >
                                     {task.isCompleted ? (
                                       <svg className="w-5 h-5 text-[#00A89E] stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1634,9 +1639,23 @@ const BookingDetails = () => {
                   <p className="text-rose-400 font-medium">{leadError}</p>
                 </div>
               ) : leadData ? (
-                <div className="space-y-6">
-                  {/* Top Key Info Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="space-y-5">
+
+                  {/* ── Product / Tour ── */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex items-center gap-3">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Product / Tour</span>
+                      <span className="block text-lg font-extrabold text-slate-100 truncate leading-tight mt-0.5">
+                        {leadData.product || '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ── Key Info Cards ── */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
                       <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Full Name</span>
                       <span className="text-slate-200 font-bold text-sm truncate block">{leadData.name || leadData.fullName || '—'}</span>
@@ -1657,140 +1676,141 @@ const BookingDetails = () => {
                       </span>
                     </div>
                     <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Lead Source</span>
-                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.leadSource || '—'}</span>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Product / Tour</span>
-                      <span className="text-indigo-300 font-bold text-sm truncate block">{leadData.product || '—'}</span>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
                       <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">CRM Lead ID</span>
                       <span className="text-slate-400 font-semibold text-sm truncate block">#{leadData.leadId || leadData.id || '—'}</span>
                     </div>
                   </div>
 
-                  {/* Trip Route & Schedule Section */}
-                  {(leadData.origin || leadData.destination || leadData.dates || (leadData.labels && leadData.labels.length > 0)) && (
-                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
-                      <h3 className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>Trip & Route Details</span>
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Route</span>
-                          <span className="text-slate-200 font-semibold">
-                            {leadData.origin ? `${leadData.origin} → ${leadData.destination || ''}` : leadData.destination || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Start Date</span>
-                          <span className="text-slate-200 font-semibold">
-                            {leadData.dates?.startDate ? formatDate(leadData.dates.startDate) : 'Not specified'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="block text-[11px] font-bold text-slate-500 uppercase">Due Date</span>
-                          <span className="text-slate-200 font-semibold">
-                            {leadData.dates?.dueDate ? formatDate(leadData.dates.dueDate) : 'Not specified'}
-                          </span>
-                        </div>
-                      </div>
-                      {leadData.labels && leadData.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {leadData.labels.map((lbl, idx) => (
-                            <span key={idx} className="bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold px-2.5 py-0.5 rounded-md">
-                              {lbl}
+                  {/* ── SECTION: CRM Notes ── */}
+                  {(() => {
+                    const allItems = leadData.notes || leadData.interactionHistory || [];
+                    const noteItems = allItems.filter(item => !item.imageUrl && !item.attachmentUrl && !item.pdfUrl);
+                    const attachmentItems = allItems.filter(item => item.imageUrl || item.attachmentUrl || item.pdfUrl);
+
+                    return (
+                      <>
+                        {/* Notes Section */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                            <Users className="w-4 h-4 text-amber-400" />
+                            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                              CRM Notes
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                              {noteItems.length}
                             </span>
-                          ))}
+                          </div>
+                          {noteItems.length > 0 ? (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {noteItems.map((item, idx) => (
+                                <div key={`note-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-amber-400 flex items-center gap-1">
+                                      <Users className="w-3 h-3" />
+                                      {item.author || item.type || 'Agent'}
+                                    </span>
+                                    <span className="text-slate-500 text-[11px] font-mono">
+                                      {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
+                                    {item.text || item.notes || item.message || '—'}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-600 italic pl-1">No notes recorded.</p>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* Call & Engagement Metrics */}
-                  {leadData.booking && (
-                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4">
-                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <span>Call & Engagement Summary</span>
-                      </h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
-                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Total Dials</span>
-                          <span className="text-lg font-extrabold text-slate-200">{leadData.booking.totalDial || 0}</span>
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
-                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Connected</span>
-                          <span className="text-lg font-extrabold text-emerald-400">{leadData.booking.connected || 0}</span>
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
-                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Talk Time</span>
-                          <span className="text-lg font-extrabold text-indigo-400">{leadData.booking.talkTime || '0:0'}</span>
-                        </div>
-                        <div className="bg-slate-900 border border-slate-800/60 rounded-lg p-2.5">
-                          <span className="block text-[10px] font-bold text-slate-500 uppercase">Last Call</span>
-                          <span className="text-xs font-bold text-slate-300 block mt-1 truncate">
-                            {leadData.booking.lastCall ? formatDate(leadData.booking.lastCall) : 'No calls yet'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* CRM Notes / Interaction History */}
-                  {(leadData.notes?.length > 0 || leadData.interactionHistory?.length > 0) && (
-                    <div className="space-y-3">
-                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-                        CRM Notes & History ({leadData.notes?.length || leadData.interactionHistory?.length})
-                      </h3>
-                      <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-                        {(leadData.notes || leadData.interactionHistory).map((item, idx) => (
-                          <div key={idx} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1.5">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="font-bold text-indigo-400 flex items-center gap-1">
-                                <Users className="w-3 h-3" />
-                                {item.author || item.type || 'CRM Note'}
-                              </span>
-                              <span className="text-slate-500 text-[11px] font-mono">
-                                {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                        {/* Interaction History Section */}
+                        {leadData.interactionHistory && leadData.interactionHistory.length > 0 && !leadData.notes && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                              <Calendar className="w-4 h-4 text-cyan-400" />
+                              <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                                Interaction History
+                              </h3>
+                              <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                                {leadData.interactionHistory.length}
                               </span>
                             </div>
-                            <p className="text-sm text-slate-200 leading-relaxed break-words font-normal">
-                              {item.text || item.notes || item.message || '—'}
-                            </p>
-                            {item.imageUrl && (
-                              <a
-                                href={item.imageUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-block text-xs text-indigo-400 hover:underline pt-1"
-                              >
-                                View Attachment →
-                              </a>
-                            )}
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {leadData.interactionHistory.map((item, idx) => (
+                                <div key={`hist-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                      {item.type || 'Interaction'}
+                                    </span>
+                                    <span className="text-slate-500 text-[11px] font-mono">
+                                      {item.date ? formatDate(item.date) : ''}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
+                                    {item.notes || item.text || item.message || '—'}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                        )}
 
-                  {/* Other Unstructured Details */}
-                  {Object.keys(leadData).filter(key => !['name', 'fullName', 'phone', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory', 'notes', 'booking', 'callLogs', 'dates', 'labels', 'agentIds', 'leadId', 'product', 'origin', 'destination', 'id'].includes(key)).length > 0 && (
-                    <div className="pt-2">
-                      <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">Other Info</h3>
-                      <div className="bg-slate-950 border border-slate-800 rounded-lg divide-y divide-slate-800/50 text-xs">
-                        {Object.entries(leadData).filter(([key]) => !['name', 'fullName', 'phone', 'mobileNumber', 'status', 'leadSource', '_id', '__v', 'createdAt', 'updatedAt', 'interactionHistory', 'notes', 'booking', 'callLogs', 'dates', 'labels', 'agentIds', 'leadId', 'product', 'origin', 'destination', 'id'].includes(key)).map(([key, value]) => (
-                          <div key={key} className="p-2.5 flex justify-between items-center">
-                            <span className="text-slate-400 font-medium capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                            <span className="text-slate-200 font-semibold text-right max-w-[65%] truncate">
-                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        {/* PDF & Attachments Section */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                            <FileText className="w-4 h-4 text-emerald-400" />
+                            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
+                              Attachments & PDFs
+                            </h3>
+                            <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                              {attachmentItems.length}
                             </span>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                          {attachmentItems.length > 0 ? (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {attachmentItems.map((item, idx) => {
+                                const url = item.pdfUrl || item.attachmentUrl || item.imageUrl;
+                                const isPdf = url && url.endsWith('.pdf');
+                                return (
+                                  <div key={`attach-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${isPdf ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
+                                        <FileImage className={`w-4.5 h-4.5 ${isPdf ? 'text-rose-400' : 'text-indigo-400'}`} />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs text-slate-300 font-semibold truncate">
+                                          {item.text || item.notes || item.message || (isPdf ? 'PDF Document' : 'Attachment')}
+                                        </p>
+                                        <span className="text-[10px] text-slate-500 font-mono">
+                                          {item.author || item.type || ''} {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                                        isPdf
+                                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                                          : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
+                                      }`}
+                                    >
+                                      {isPdf ? 'Open PDF' : 'View'}
+                                    </a>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-600 italic pl-1">No attachments or PDFs found.</p>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ) : null}
             </div>

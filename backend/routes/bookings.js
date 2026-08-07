@@ -4,6 +4,28 @@ const Booking = require('../models/Booking');
 const { protect, verifiedOnly, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/multerConfig');
 
+// Helper: Check if a transaction ID already exists anywhere in the database
+// Searches both Booking.transactionId and all Booking.payments[].details fields
+async function isTransactionIdDuplicate(txnId, excludeBookingId = null) {
+  const trimmedTxn = txnId.trim();
+  if (!trimmedTxn) return false;
+
+  const query = {
+    $or: [
+      { transactionId: trimmedTxn },
+      { 'payments.details': trimmedTxn }
+    ]
+  };
+
+  // Optionally exclude a specific booking (for edits within the same booking)
+  if (excludeBookingId) {
+    query._id = { $ne: excludeBookingId };
+  }
+
+  const existing = await Booking.findOne(query).select('_id bookingId').lean();
+  return existing;
+}
+
 // @desc    Create a new booking
 // @route   POST /api/bookings
 // @access  Private & Verified
@@ -36,6 +58,17 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
     // Check if screenshot file was uploaded
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Please upload a transaction screenshot' });
+    }
+
+    // Check for duplicate transaction ID across the entire system
+    if (transactionId && transactionId.trim()) {
+      const duplicateBooking = await isTransactionIdDuplicate(transactionId);
+      if (duplicateBooking) {
+        return res.status(400).json({
+          success: false,
+          message: `Transaction ID "${transactionId.trim()}" already exists in booking ${duplicateBooking.bookingId}. Each transaction ID must be unique.`
+        });
+      }
     }
 
     // Cloudinary secure URL is stored in req.file.path
@@ -97,12 +130,11 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
   try {
     let query = {};
 
-    // Employees can see bookings they created or are assigned to ONLY IF they are Confirmed
+    // Employees can see bookings they created. Assigned employees can only see them if NOT Pending.
     if (req.user.role === 'employee') {
-      query.status = 'Confirmed';
       query.$or = [
         { createdBy: req.user._id },
-        { assignedTo: req.user._id }
+        { assignedTo: req.user._id, status: { $ne: 'Pending' } }
       ];
     }
 
@@ -176,10 +208,10 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
 
     // Visibility Logic
     if (req.user.role === 'employee') {
-      query.status = 'Confirmed';
+      // Employees can see bookings they created. Assigned employees can only see them if NOT Pending.
       query.$or = [
         { createdBy: req.user._id },
-        { assignedTo: req.user._id }
+        { assignedTo: req.user._id, status: { $ne: 'Pending' } }
       ];
     } else if (req.user.role === 'admin' && status) {
       query.status = status;
@@ -385,6 +417,16 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update this booking status.' });
     }
 
+    // Employees cannot change booking status — only admins can
+    if (status && req.user.role === 'employee') {
+      return res.status(403).json({ success: false, message: 'Access denied: Employees cannot change booking status.' });
+    }
+
+    // Once Confirmed, cannot go back to Pending
+    if (status === 'Pending' && booking.status === 'Confirmed') {
+      return res.status(400).json({ success: false, message: 'Cannot change a Confirmed booking back to Pending.' });
+    }
+
     const bookingStatuses = ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
     const tripStatuses = ['Pending', 'Cancelled', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'];
 
@@ -458,16 +500,22 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Employees can only view bookings they created or are assigned to ONLY IF they are Confirmed
+    // Employees can view ALL bookings they created or are assigned to
     if (req.user.role === 'employee') {
-      const isConfirmed = booking.status === 'Confirmed';
       const isCreator = booking.createdBy && booking.createdBy._id.toString() === req.user._id.toString();
       const isAssigned = booking.assignedTo && booking.assignedTo.some(userObj => {
         const id = userObj._id || userObj;
         return id.toString() === req.user._id.toString();
       });
-      if (!isConfirmed || (!isCreator && !isAssigned)) {
+      
+      const isPending = booking.status === 'Pending';
+
+      if (!isCreator && !isAssigned) {
         return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to view this booking.' });
+      }
+
+      if (isPending && !isCreator) {
+        return res.status(403).json({ success: false, message: 'Access denied: Pending bookings are only visible to their creator.' });
       }
     }
 
@@ -584,28 +632,47 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       feedbackComment,
     } = req.body;
 
-    if (startDate) booking.startDate = startDate;
-    if (endDate) booking.endDate = endDate;
-    if (packageName) booking.packageName = packageName;
-    if (location) booking.location = location;
-    if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
-    if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
-    if (transactionId) booking.transactionId = transactionId;
-    if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
-    if (travellerName) booking.travellerName = travellerName;
-    if (travellerEmail) booking.travellerEmail = travellerEmail;
-    if (travellerPhone) booking.travellerPhone = travellerPhone;
-    
-    if (adults !== undefined) booking.adults = Number(adults);
-    if (children !== undefined) booking.children = Number(children);
-    if (status) booking.status = status;
-    if (tripStatus) booking.tripStatus = tripStatus;
-    if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
-    if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
-    if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
+    // Employees can only edit startDate and endDate (Service Date & Schedule)
+    if (req.user.role === 'employee') {
+      if (startDate) booking.startDate = startDate;
+      if (endDate) booking.endDate = endDate;
 
-    // Handle optional screenshot upload
-    if (req.file) {
+      // Block all other field changes for employees
+      const restrictedFields = ['packageName', 'location', 'totalAmount', 'paidAmount', 'transactionId',
+        'paymentMode', 'travellerName', 'travellerEmail', 'travellerPhone', 'adults', 'children',
+        'status', 'tripStatus', 'profitMargin', 'feedbackRating', 'feedbackComment'];
+      const attemptedRestricted = restrictedFields.filter(f => req.body[f] !== undefined && req.body[f] !== '');
+      if (attemptedRestricted.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Employees can only edit Service Date & Schedule.'
+        });
+      }
+    } else {
+      // Admin: full edit access
+      if (startDate) booking.startDate = startDate;
+      if (endDate) booking.endDate = endDate;
+      if (packageName) booking.packageName = packageName;
+      if (location) booking.location = location;
+      if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
+      if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
+      if (transactionId) booking.transactionId = transactionId;
+      if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
+      if (travellerName) booking.travellerName = travellerName;
+      if (travellerEmail) booking.travellerEmail = travellerEmail;
+      if (travellerPhone) booking.travellerPhone = travellerPhone;
+      
+      if (adults !== undefined) booking.adults = Number(adults);
+      if (children !== undefined) booking.children = Number(children);
+      if (status) booking.status = status;
+      if (tripStatus) booking.tripStatus = tripStatus;
+      if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
+      if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
+      if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
+    }
+
+    // Handle optional screenshot upload (admin only)
+    if (req.file && isAdmin) {
       booking.screenshot = req.file.path;
     }
 
@@ -659,6 +726,20 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
 
     if (!transactionId || !transactionId.trim()) {
       return res.status(400).json({ success: false, message: 'Transaction ID is required' });
+    }
+
+    // Check for duplicate transaction ID across the entire system
+    const duplicateBooking = await isTransactionIdDuplicate(transactionId);
+    if (duplicateBooking) {
+      // Also check within the current booking's own payments
+      const existsInCurrentBooking = booking.payments.some(p => p.details === transactionId.trim());
+      const existsAsBookingTxn = booking.transactionId === transactionId.trim();
+      if (duplicateBooking._id.toString() !== booking._id.toString() || existsInCurrentBooking || existsAsBookingTxn) {
+        return res.status(400).json({
+          success: false,
+          message: `Transaction ID "${transactionId.trim()}" already exists. Each transaction ID must be unique.`
+        });
+      }
     }
 
     // Calculate current remaining dueAmount
@@ -758,9 +839,25 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     if (paymentDate) payment.paymentDate = new Date(paymentDate);
     if (paymentFrom) payment.paymentFrom = paymentFrom;
     if (paymentTo) payment.paymentTo = paymentTo;
-    if (details) {
-      payment.details = details;
-      booking.transactionId = details; // update latest transaction ID
+    if (details && details.trim() !== payment.details) {
+      // Check for duplicate transaction ID when changing it
+      const duplicateBooking = await isTransactionIdDuplicate(details, booking._id);
+      if (duplicateBooking) {
+        return res.status(400).json({
+          success: false,
+          message: `Transaction ID "${details.trim()}" already exists in booking ${duplicateBooking.bookingId}. Each transaction ID must be unique.`
+        });
+      }
+      // Also check within the same booking's other payments
+      const existsInSameBooking = booking.payments.some((p, i) => i !== paymentIndex && p.details === details.trim());
+      if (existsInSameBooking) {
+        return res.status(400).json({
+          success: false,
+          message: `Transaction ID "${details.trim()}" already exists in another payment entry of this booking. Each transaction ID must be unique.`
+        });
+      }
+      payment.details = details.trim();
+      booking.transactionId = details.trim();
     }
     if (status) {
       if (req.user.role !== 'admin') {
@@ -845,16 +942,9 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
           .reduce((sum, p) => sum + p.amountPaid, 0);
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
-        // Update booking status based on remaining due amount
-        // Auto-confirm booking when verifying the first payment on a Pending booking
-        if (isFirstVerifiedPayment && wasBookingPending) {
+        // Update booking status: automatically confirm when a payment is verified
+        if (booking.status !== 'Cancelled') {
           booking.status = 'Confirmed';
-        } else if (isFirstVerifiedPayment) {
-          booking.status = 'Confirmed';
-        } else if (booking.dueAmount <= 0) {
-          booking.status = 'Payment Done';
-        } else {
-          booking.status = 'Partial Payment';
         }
 
         const autoConfirmedMsg = (isFirstVerifiedPayment && wasBookingPending)
@@ -943,6 +1033,14 @@ router.patch('/:id/toggle-task', protect, verifiedOnly, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'System logged tasks cannot be manually toggled',
+      });
+    }
+
+    // Employees cannot un-toggle (uncheck) a completed task
+    if (req.user.role === 'employee' && task.isCompleted) {
+      return res.status(403).json({
+        success: false,
+        message: 'Employees cannot uncheck a completed activity audit task.',
       });
     }
 

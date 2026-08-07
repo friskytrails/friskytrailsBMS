@@ -23,6 +23,7 @@ const CreateBooking = ({ isEdit }) => {
     paidAmount: '',
     dueAmount: 0,
     transactionId: '',
+    paymentMode: 'Kalpana BOI',
     adults: '',
     children: '',
     status: 'Pending',
@@ -91,6 +92,7 @@ const CreateBooking = ({ isEdit }) => {
             paidAmount: b.paidAmount !== undefined ? b.paidAmount : '',
             dueAmount: b.dueAmount || 0,
             transactionId: b.transactionId || '',
+            paymentMode: b.payments?.[0]?.paymentMode || 'Kalpana BOI',
             adults: b.adults !== undefined ? b.adults : '',
             children: b.children !== undefined ? b.children : '',
             status: b.status || 'Pending',
@@ -275,6 +277,7 @@ const CreateBooking = ({ isEdit }) => {
       data.append('totalAmount', formData.totalAmount);
       data.append('paidAmount', formData.paidAmount || '0');
       data.append('transactionId', formData.transactionId);
+      data.append('paymentMode', formData.paymentMode);
       data.append('adults', formData.adults);
       data.append('children', formData.children);
       data.append('status', formData.status);
@@ -728,6 +731,27 @@ const CreateBooking = ({ isEdit }) => {
                 )}
               </div>
 
+
+              {/* Payment Mode */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Payment Mode <span className="text-rose-450">*</span>
+                </label>
+                <select
+                  name="paymentMode"
+                  required
+                  value={formData.paymentMode}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors cursor-pointer"
+                >
+                  <option value="Kalpana BOI">Kalpana BOI</option>
+                  <option value="Kalpana PNB">Kalpana PNB</option>
+                  <option value="Babita AU">Babita AU</option>
+                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                  <option value="FT HDFC">FT HDFC</option>
+                  <option value="Pratyush SBI">Pratyush SBI</option>
+                </select>
+              </div>
               {/* Status Dropdown */}
               {isEdit && (
                 <div>

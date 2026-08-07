@@ -175,7 +175,7 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                   className={`p-3 rounded-2xl text-sm leading-relaxed border flex flex-col gap-2 ${
                     isAdmin
                       ? 'bg-[#00A89E] text-white border-[#00A89E]/20 shadow-md shadow-[#00A89E]/5 rounded-tl-none'
-                      : 'bg-[#1A1A1A] text-slate-200 border-slate-800 rounded-tr-none'
+                      : 'bg-[#1A1A1A] text-white border-[#333] rounded-tr-none'
                   }`}
                 >
                   {comment.message && <p className="whitespace-pre-wrap">{comment.message}</p>}
