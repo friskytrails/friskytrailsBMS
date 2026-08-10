@@ -33,6 +33,8 @@ const SearchDashboard = () => {
     location: '',
   });
 
+  const [showAllFilters, setShowAllFilters] = useState(false);
+
   // UI state
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +90,7 @@ const SearchDashboard = () => {
     setBookings([]);
     setSearched(false);
     setError('');
+    setShowAllFilters(false);
   };
 
   // Search submit handler
@@ -127,6 +130,8 @@ const SearchDashboard = () => {
     }
   };
 
+
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -164,30 +169,14 @@ const SearchDashboard = () => {
             </div>
           </div>
 
-          {/* Payment ID */}
+          {/* Booking Date (createdAt) */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payment ID</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date</label>
             <div className="relative">
               <input
-                type="text"
-                name="paymentId"
-                placeholder="123456"
-                value={filters.paymentId}
-                onChange={handleInputChange}
-                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Traveller Name */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Traveller Name</label>
-            <div className="relative">
-              <input
-                type="text"
-                name="travellerName"
-                placeholder="Traveller Name (Partial)"
-                value={filters.travellerName}
+                type="date"
+                name="bookingDate"
+                value={filters.bookingDate}
                 onChange={handleInputChange}
                 className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
               />
@@ -209,49 +198,69 @@ const SearchDashboard = () => {
             </div>
           </div>
 
-          {/* Booking Date (createdAt) */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date</label>
-            <div className="relative">
-              <input
-                type="date"
-                name="bookingDate"
-                value={filters.bookingDate}
-                onChange={handleInputChange}
-                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
-              />
-            </div>
-          </div>
+          {showAllFilters && (
+            <>
+              {/* Payment ID */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payment ID</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="paymentId"
+                    placeholder="123456"
+                    value={filters.paymentId}
+                    onChange={handleInputChange}
+                    className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
+                  />
+                </div>
+              </div>
 
-          {/* Location / Destination */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Location / Destination</label>
-            <div className="relative">
-              <input
-                type="text"
-                name="location"
-                placeholder="Destination name (dropdown or search)"
-                value={filters.location}
-                onChange={handleInputChange}
-                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
-              />
-            </div>
-          </div>
+              {/* Traveller Name */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Traveller Name</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="travellerName"
+                    placeholder="Traveller Name (Partial)"
+                    value={filters.travellerName}
+                    onChange={handleInputChange}
+                    className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
 
-          {/* Transaction ID */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaction ID</label>
-            <div className="relative">
-              <input
-                type="text"
-                name="transactionId"
-                placeholder="Exact TXN ID"
-                value={filters.transactionId}
-                onChange={handleInputChange}
-                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
-              />
-            </div>
-          </div>
+              {/* Location / Destination */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Location / Destination</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="location"
+                    placeholder="Destination name (dropdown or search)"
+                    value={filters.location}
+                    onChange={handleInputChange}
+                    className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Transaction ID */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Transaction ID</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="transactionId"
+                    placeholder="Exact TXN ID"
+                    value={filters.transactionId}
+                    onChange={handleInputChange}
+                    className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Service Start Date */}
           <div className="space-y-1">
@@ -292,23 +301,33 @@ const SearchDashboard = () => {
             Reset Filters
           </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center justify-center space-x-2 py-2.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all duration-200 shadow-lg shadow-indigo-600/10 cursor-pointer disabled:opacity-50"
-          >
-            {loading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Searching...</span>
-              </>
-            ) : (
-              <>
-                <Search className="w-4 h-4" />
-                <span>Get Data</span>
-              </>
-            )}
-          </button>
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={() => setShowAllFilters(!showAllFilters)}
+              className="flex items-center justify-center space-x-2 py-2.5 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-semibold text-sm transition-all duration-200 shadow-lg cursor-pointer border border-slate-700"
+            >
+              <Eye className="w-4 h-4" />
+              <span>{showAllFilters ? 'Hide Filters' : 'View All'}</span>
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center space-x-2 py-2.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all duration-200 shadow-lg shadow-indigo-600/10 cursor-pointer disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Searching...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Get Data</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
 

@@ -198,6 +198,13 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
         const start = new Date(startDate);
         start.setUTCHours(0, 0, 0, 0);
         query.startDate.$gte = start;
+
+        // If only startDate is provided (no endDate), match that specific day
+        if (!endDate) {
+          const startDayEnd = new Date(startDate);
+          startDayEnd.setUTCHours(23, 59, 59, 999);
+          query.startDate.$lte = startDayEnd;
+        }
       }
       if (endDate) {
         const end = new Date(endDate);
@@ -398,7 +405,7 @@ router.patch('/assign/:id', protect, adminOnly, async (req, res) => {
 // @access  Private & Verified
 router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
   try {
-    const { status, tripStatus } = req.body;
+    const { status, tripStatus, statusComment } = req.body;
     if (!status && !tripStatus) {
       return res.status(400).json({ success: false, message: 'Status is required' });
     }
@@ -428,7 +435,7 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookingStatuses = ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
-    const tripStatuses = ['Pending', 'Cancelled', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'];
+    const tripStatuses = ['Pending', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
 
     if (status && !bookingStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid booking status value' });
@@ -439,6 +446,25 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
 
     if (status) booking.status = status;
     if (tripStatus) booking.tripStatus = tripStatus;
+
+    // Log every trip status change in comments
+    if (tripStatus) {
+      const commentRequiredStatuses = ['Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
+      if (commentRequiredStatuses.includes(tripStatus) && statusComment && statusComment.trim()) {
+        booking.comments.push({
+          senderName: `System / ${req.user.name}`,
+          message: `Trip Status changed to "${tripStatus}": ${statusComment.trim()}`,
+          timestamp: new Date()
+        });
+      } else {
+        booking.comments.push({
+          senderName: `System / ${req.user.name}`,
+          message: `Trip Status changed to "${tripStatus}"`,
+          timestamp: new Date()
+        });
+      }
+    }
+
     await booking.save();
 
     const updatedBooking = await Booking.findById(booking._id)
@@ -500,7 +526,9 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Employees can view ALL bookings they created or are assigned to
+    // Employee access control:
+    // - Pending bookings: NO employee can view (not even creator — must wait for payment approval)
+    // - Confirmed/other statuses: only creator or assigned employees can view
     if (req.user.role === 'employee') {
       const isCreator = booking.createdBy && booking.createdBy._id.toString() === req.user._id.toString();
       const isAssigned = booking.assignedTo && booking.assignedTo.some(userObj => {
@@ -510,12 +538,14 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
       
       const isPending = booking.status === 'Pending';
 
-      if (!isCreator && !isAssigned) {
-        return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to view this booking.' });
+      // Pending bookings are not viewable by any employee (creator must wait for admin confirmation)
+      if (isPending) {
+        return res.status(403).json({ success: false, message: 'Get the Payment Approved & Booking Assigned to you to view the booking.' });
       }
 
-      if (isPending && !isCreator) {
-        return res.status(403).json({ success: false, message: 'Access denied: Pending bookings are only visible to their creator.' });
+      // Non-pending bookings: only creator or assigned employees can view
+      if (!isCreator && !isAssigned) {
+        return res.status(403).json({ success: false, message: 'Get the Payment Approved & Booking Assigned to you to view the booking.' });
       }
     }
 
@@ -632,6 +662,17 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       feedbackComment,
     } = req.body;
 
+    // Validate: startDate must not be later than endDate
+    const effectiveStartDate = startDate ? new Date(startDate) : booking.startDate;
+    const effectiveEndDate = endDate ? new Date(endDate) : booking.endDate;
+    if (effectiveStartDate && effectiveEndDate && effectiveStartDate > effectiveEndDate) {
+      return res.status(400).json({ success: false, message: 'Start Date cannot be later than End Date.' });
+    }
+
+    // Track service date changes for audit logging
+    const oldStartDate = booking.startDate;
+    const oldEndDate = booking.endDate;
+
     // Employees can only edit startDate and endDate (Service Date & Schedule)
     if (req.user.role === 'employee') {
       if (startDate) booking.startDate = startDate;
@@ -669,6 +710,23 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
       if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
       if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
+    }
+
+    // Audit log: Service Date changes
+    const formatDateShort = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+    const startChanged = startDate && new Date(startDate).toISOString() !== new Date(oldStartDate).toISOString();
+    const endChanged = endDate && new Date(endDate).toISOString() !== new Date(oldEndDate).toISOString();
+
+    if (startChanged || endChanged) {
+      let changeParts = [];
+      if (startChanged) changeParts.push(`Departure: ${formatDateShort(oldStartDate)} → ${formatDateShort(startDate)}`);
+      if (endChanged) changeParts.push(`Return: ${formatDateShort(oldEndDate)} → ${formatDateShort(endDate)}`);
+
+      booking.comments.push({
+        senderName: `System / ${req.user.name}`,
+        message: `Service Date Updated — ${changeParts.join(' | ')}`,
+        timestamp: new Date()
+      });
     }
 
     // Handle optional screenshot upload (admin only)

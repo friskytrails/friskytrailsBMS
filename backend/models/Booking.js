@@ -152,7 +152,7 @@ const BookingSchema = new mongoose.Schema({
   },
   tripStatus: {
     type: String,
-    enum: ['Pending', 'Cancelled', 'Fulfillment Done', 'Trip Completed', 'No Refund', 'Refund Required', 'Refund Done'],
+    enum: ['Pending', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'],
     default: 'Pending',
   },
   assignedTo: {

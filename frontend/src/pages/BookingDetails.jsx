@@ -17,7 +17,8 @@ import {
   UserPlus,
   X,
   Edit,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
@@ -31,11 +32,15 @@ const getStatusStyles = (status) => {
     case 'Trip Completed':
     case 'Booked':
       return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25';
-    case 'Refund Required':
+    case 'Cash Refund':
+    case 'Wallet Refund':
     case 'Cancelled':
       return 'bg-rose-500/10 text-rose-500 border-rose-500/25';
-    case 'Refund Done':
+    case 'Cash Refund Done':
+    case 'Wallet Refund Done':
       return 'bg-blue-500/10 text-blue-500 border-blue-500/25';
+    case 'Postponed':
+      return 'bg-purple-500/10 text-purple-400 border-purple-500/25';
     case 'No Refund':
     case 'On Hold':
       return 'bg-slate-500/10 text-slate-400 border-slate-500/25';
@@ -55,6 +60,8 @@ const BookingDetails = () => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
 
   // CRM Lead State
@@ -137,6 +144,9 @@ const BookingDetails = () => {
         if (data.success) {
           setBooking(data.data);
           setProfitMarginInput(data.data.profitMargin || 0);
+        } else if (res.status === 403) {
+          setAccessDenied(true);
+          setAccessDeniedMessage(data.message || 'You do not have access to view this booking.');
         } else {
           setError(data.message || 'Booking not found');
         }
@@ -319,19 +329,37 @@ const BookingDetails = () => {
     }
   };
 
+  // Trip statuses that require a comment
+  const commentRequiredTripStatuses = ['Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
+
   const handleTripStatusChange = async (e) => {
     const newTripStatus = e.target.value;
     if (!newTripStatus || newTripStatus === booking.tripStatus) return;
 
+    // Prompt for comment if this status requires one
+    let statusComment = '';
+    if (commentRequiredTripStatuses.includes(newTripStatus)) {
+      const userComment = window.prompt(`Add a comment for status "${newTripStatus}" (required):`);
+      if (userComment === null) return; // User cancelled
+      statusComment = userComment.trim();
+      if (!statusComment) {
+        alert('A comment is required for this status change.');
+        return;
+      }
+    }
+
     setUpdatingTripStatus(true);
     try {
+      const bodyPayload = { tripStatus: newTripStatus };
+      if (statusComment) bodyPayload.statusComment = statusComment;
+
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ tripStatus: newTripStatus }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json();
       if (data.success) {
@@ -394,6 +422,10 @@ const BookingDetails = () => {
   };
 
   const handleSaveServices = () => {
+    if (servicesFields.startDate && servicesFields.endDate && new Date(servicesFields.startDate) > new Date(servicesFields.endDate)) {
+      alert('Start Date cannot be later than End Date.');
+      return;
+    }
     handleSaveBookingFields(servicesFields, () => setIsEditingServices(false));
   };
 
@@ -429,6 +461,12 @@ const BookingDetails = () => {
       !fullEditTotalAmount
     ) {
       setFormError('All fields are required.');
+      setSubmittingPayment(false);
+      return;
+    }
+
+    if (new Date(fullEditStartDate) > new Date(fullEditEndDate)) {
+      setFormError('Start Date cannot be later than End Date.');
       setSubmittingPayment(false);
       return;
     }
@@ -795,6 +833,26 @@ const BookingDetails = () => {
     );
   }
 
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-5">
+            <Lock className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-100 mb-2">Booking Access Restricted</h2>
+          <p className="text-slate-400 text-sm mb-6 leading-relaxed">{accessDeniedMessage}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all cursor-pointer"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (error || !booking) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -857,61 +915,69 @@ const BookingDetails = () => {
                 {booking.bookingId}
               </span>
 
-              {/* Booking Status Dropdown — Admin only */}
-              {isAdmin ? (
-                <div className="relative flex items-center">
-                  <select
-                    value={booking.status}
-                    onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
-                    disabled={updatingStatus}
-                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${getStatusStyles(booking.status)
-                      }`}
-                  >
-                    {booking.status === 'Pending' && (
-                      <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+              {/* Booking Status Section */}
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Booking Status</span>
+                {isAdmin ? (
+                  <div className="relative flex items-center">
+                    <select
+                      value={booking.status}
+                      onChange={(e) => handleStatusChange({ target: { value: e.target.value } })}
+                      disabled={updatingStatus}
+                      className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#00A89E]/50 bg-slate-900 transition-all ${getStatusStyles(booking.status)
+                        }`}
+                    >
+                      {booking.status === 'Pending' && (
+                        <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                      )}
+                      <option value="Confirmed" className="bg-slate-900 text-emerald-500">Confirmed</option>
+                      <option value="Cancelled" className="bg-slate-900 text-rose-500">Reject</option>
+                    </select>
+                    {updatingStatus && (
+                      <span className="ml-2 w-4 h-4 border-2 border-[#00A89E] border-t-transparent rounded-full animate-spin"></span>
                     )}
-                    <option value="Confirmed" className="bg-slate-900 text-emerald-500">Confirmed</option>
-                    <option value="Cancelled" className="bg-slate-900 text-rose-500">Reject</option>
-                  </select>
-                  {updatingStatus && (
-                    <span className="ml-2 w-4 h-4 border-2 border-[#00A89E] border-t-transparent rounded-full animate-spin"></span>
-                  )}
-                </div>
-              ) : (
-                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.status)
-                  }`}>
-                  {booking.status}
-                </span>
-              )}
+                  </div>
+                ) : (
+                  <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.status)
+                    }`}>
+                    {booking.status}
+                  </span>
+                )}
+              </div>
 
-              {/* Trip Status Dropdown */}
-              {canEdit ? (
-                <div className="relative flex items-center">
-                  <select
-                    value={booking.tripStatus || 'Pending'}
-                    onChange={handleTripStatusChange}
-                    disabled={updatingTripStatus}
-                    className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 bg-slate-900 transition-all ${getStatusStyles(booking.tripStatus || 'Pending')
-                      }`}
-                  >
-                    <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
-                    <option value="Cancelled" className="bg-slate-900 text-rose-500">Cancelled</option>
-                    <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
-                    <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
-                    <option value="No Refund" className="bg-slate-900 text-slate-400">No Refund</option>
-                    <option value="Refund Required" className="bg-slate-900 text-rose-500">Refund Required</option>
-                    <option value="Refund Done" className="bg-slate-900 text-blue-500">Refund Done</option>
-                  </select>
-                  {updatingTripStatus && (
-                    <span className="ml-2 w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
-                  )}
-                </div>
-              ) : (
-                <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.tripStatus || 'Pending')
-                  }`}>
-                  {booking.tripStatus || 'Pending'}
-                </span>
-              )}
+              {/* Trip Status Section */}
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-slate-500">Trip Status</span>
+                {canEdit ? (
+                  <div className="relative flex items-center">
+                    <select
+                      value={booking.tripStatus || 'Pending'}
+                      onChange={handleTripStatusChange}
+                      disabled={updatingTripStatus}
+                      className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 bg-slate-900 transition-all ${getStatusStyles(booking.tripStatus || 'Pending')
+                        }`}
+                    >
+                      <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                      <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
+                      <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
+                      <option value="Postponed" className="bg-slate-900 text-purple-400">Postponed</option>
+                      <option value="Cash Refund" className="bg-slate-900 text-rose-500">Cash Refund</option>
+                      <option value="Wallet Refund" className="bg-slate-900 text-rose-500">Wallet Refund</option>
+                      <option value="No Refund" className="bg-slate-900 text-slate-400">No Refund</option>
+                      <option value="Cash Refund Done" className="bg-slate-900 text-blue-500">Cash Refund Done</option>
+                      <option value="Wallet Refund Done" className="bg-slate-900 text-blue-500">Wallet Refund Done</option>
+                    </select>
+                    {updatingTripStatus && (
+                      <span className="ml-2 w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+                    )}
+                  </div>
+                ) : (
+                  <span className={`text-xs md:text-sm font-extrabold px-4 py-2 rounded-full border ${getStatusStyles(booking.tripStatus || 'Pending')
+                    }`}>
+                    {booking.tripStatus || 'Pending'}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1197,6 +1263,7 @@ const BookingDetails = () => {
                         <input
                           type="date"
                           value={servicesFields.startDate}
+                          max={servicesFields.endDate || undefined}
                           onChange={(e) => setServicesFields({ ...servicesFields, startDate: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none transition-colors"
                         />
@@ -1206,6 +1273,7 @@ const BookingDetails = () => {
                         <input
                           type="date"
                           value={servicesFields.endDate}
+                          min={servicesFields.startDate || undefined}
                           onChange={(e) => setServicesFields({ ...servicesFields, endDate: e.target.value })}
                           className="w-full bg-slate-900 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl px-4 py-2.5 text-slate-100 text-sm focus:outline-none transition-colors"
                         />
