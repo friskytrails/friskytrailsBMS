@@ -81,7 +81,9 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       packageName,
       location,
       totalAmount: Number(totalAmount),
-      paidAmount: Number(paidAmount),
+      // The submitted amount is a payment claim until an admin verifies it.
+      // Never expose it as paid at booking creation time.
+      paidAmount: 0,
       transactionId,
       screenshot: screenshotPath,
       travellerName,
@@ -434,7 +436,7 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot change a Confirmed booking back to Pending.' });
     }
 
-    const bookingStatuses = ['Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
+    const bookingStatuses = ['Pending', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
     const tripStatuses = ['Pending', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
 
     if (status && !bookingStatuses.includes(status)) {
@@ -800,8 +802,13 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       }
     }
 
-    // Calculate current remaining dueAmount
-    const currentDue = booking.totalAmount - booking.paidAmount;
+    // Only verified payments reduce the balance. paidAmount is normally kept
+    // in sync by the model, but calculate from payment records here as an
+    // additional guard against stale/legacy booking values.
+    const verifiedAmount = booking.payments
+      .filter(payment => payment.status === 'VERIFIED')
+      .reduce((sum, payment) => sum + payment.amountPaid, 0);
+    const currentDue = Math.max(0, booking.totalAmount - verifiedAmount);
     if (newPayment > currentDue) {
       return res.status(400).json({ success: false, message: `Payment amount ₹${newPayment} exceeds remaining due balance of ₹${currentDue}` });
     }

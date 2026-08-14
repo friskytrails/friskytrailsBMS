@@ -146,7 +146,7 @@ const BookingSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Booking status is required'],
     enum: [
-      'Pending', 'Booked', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'
+      'Pending', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'
     ],
     default: 'Pending',
   },
@@ -271,6 +271,9 @@ function ensureTasksChecklist(doc) {
 
 // Auto-generate Booking ID and calculate due amount pre-validation
 BookingSchema.pre('validate', async function (next) {
+  // Booked was a legacy booking status; normalize it to the single approval state.
+  if (this.status === 'Booked') this.status = 'Confirmed';
+
   ensureInitialPayment(this);
   ensureTasksChecklist(this);
 
@@ -331,6 +334,22 @@ BookingSchema.pre('validate', async function (next) {
 BookingSchema.post('init', function (doc) {
   ensureInitialPayment(doc);
   ensureTasksChecklist(doc);
+
+  // Recalculate paidAmount from VERIFIED payments only (mirrors pre-validate logic).
+  // This ensures loaded documents always reflect the correct verified total,
+  // even if the stored paidAmount in the DB is stale or was written by older code.
+  if (doc.payments && doc.payments.length > 0) {
+    doc.paidAmount = doc.payments
+      .filter(p => p.status === 'VERIFIED')
+      .reduce((sum, p) => sum + p.amountPaid, 0);
+  } else if (doc.payments) {
+    // payments array exists but is empty — nothing verified
+    doc.paidAmount = 0;
+  }
+  // Recalculate dueAmount to stay consistent
+  if (doc.totalAmount !== undefined && doc.paidAmount !== undefined) {
+    doc.dueAmount = Math.max(0, doc.totalAmount - doc.paidAmount);
+  }
 });
 
 BookingSchema.index({ travellerName: 1 });

@@ -30,7 +30,6 @@ const getStatusStyles = (status) => {
     case 'Confirmed':
       return 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/25';
     case 'Trip Completed':
-    case 'Booked':
       return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/25';
     case 'Cash Refund':
     case 'Wallet Refund':
@@ -781,7 +780,7 @@ const BookingDetails = () => {
       completed: true,
     });
 
-    const hasMilestones = ['Booked', 'Confirmed', 'Payment Done', 'Partial Payment'].includes(booking.status);
+    const hasMilestones = ['Confirmed', 'Payment Done', 'Partial Payment'].includes(booking.status);
     logs.push({
       id: 'mail-sent',
       taskName: 'Mail Confirmation Sent',

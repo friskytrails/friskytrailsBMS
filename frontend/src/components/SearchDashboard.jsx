@@ -431,7 +431,7 @@ const SearchDashboard = () => {
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap">
                       <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
-                        booking.status === 'Booked' || booking.status === 'Confirmed'
+                        booking.status === 'Confirmed'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                           : booking.status === 'Cancelled'
                           ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
