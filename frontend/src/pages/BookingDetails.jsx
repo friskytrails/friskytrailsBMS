@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   Calendar,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
+import ServiceOptionsTab from '../components/ServiceOptionsTab';
 
 const getStatusStyles = (status) => {
   switch (status) {
@@ -883,14 +884,17 @@ const BookingDetails = () => {
   const totalAmount = booking.totalAmount || 0;
   const paidAmount = booking.paidAmount || 0;
   const dueAmount = booking.dueAmount || 0;
+  const profitMargin = booking.profitMargin || 0;
   const paidPercent = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 105) > 100 ? 100 : Math.round((paidAmount / totalAmount) * 100) : 0;
   const duePercent = totalAmount > 0 ? 100 - paidPercent : 0;
+  const profitPercent = totalAmount > 0 ? Math.round((profitMargin / totalAmount) * 100) : 0;
   const daysDiff = calculateDaysRemaining(booking.startDate);
 
   // Tabs structure
   const tabs = [
     { id: 'overview', name: 'BOOKING SNAPSHOT' },
     { id: 'payments', name: 'BILLING & PAYMENTS' },
+    { id: 'services', name: 'SERVICE OPTIONS' },
     { id: 'comments', name: 'FOLLOW-UP HISTORY' }
   ];
 
@@ -1344,8 +1348,8 @@ const BookingDetails = () => {
                     <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Financials & Activity Log</h3>
                   </div>
 
-                  {/* Financial 3-Mini Cards Top Row */}
-                  <div className="grid grid-cols-3 gap-3">
+                  {/* Financial 4-Mini Cards Top Row */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow-inner">
                       <span className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider">Total</span>
                       <span className="text-xs md:text-sm font-extrabold text-slate-300 mt-1.5 font-mono">₹{totalAmount.toLocaleString()}</span>
@@ -1365,6 +1369,14 @@ const BookingDetails = () => {
                         <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${dueAmount === 0 ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>{duePercent}%</span>
                       </div>
                       <span className={`text-xs md:text-sm font-extrabold mt-1.5 font-mono ${dueAmount === 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>₹{dueAmount.toLocaleString()}</span>
+                    </div>
+
+                    <div className={`p-3.5 rounded-lg border flex flex-col justify-between relative shadow-inner ${profitMargin >= 0 ? 'bg-teal-500/10 border-teal-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-[10px] md:text-xs font-extrabold uppercase tracking-wider ${profitMargin >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-rose-600 dark:text-rose-400'}`}>Margin</span>
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${profitMargin >= 0 ? 'bg-teal-600 text-white' : 'bg-rose-600 text-white'}`}>{profitPercent}%</span>
+                      </div>
+                      <span className={`text-xs md:text-sm font-extrabold mt-1.5 font-mono ${profitMargin >= 0 ? 'text-teal-600 dark:text-teal-300' : 'text-rose-600 dark:text-rose-300'}`}>₹{profitMargin.toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -1451,24 +1463,19 @@ const BookingDetails = () => {
                   </button>
                 </div>
 
-                {/* Profit Margin controls */}
-                <div className="flex items-center gap-2 bg-slate-900 p-2 border border-slate-800 rounded-lg">
-                  <span className="text-xs font-extrabold text-blue-400 bg-blue-500/10 px-2 py-1 rounded">
-                    Profit Margin: {booking.profitMargin || 0}
-                  </span>
-                  <span className="text-slate-400 text-xs font-bold">→</span>
-                  <input
-                    type="number"
-                    value={profitMarginInput}
-                    onChange={(e) => setProfitMarginInput(e.target.value)}
-                    onBlur={() => handleProfitMarginSave(profitMarginInput)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleProfitMarginSave(profitMarginInput);
-                    }}
-                    placeholder="Profit Margin"
-                    className="w-20 bg-slate-950 border border-slate-800 focus:border-[#00A89E] rounded-md px-2 py-1 text-xs text-slate-100 focus:outline-none"
-                    title="Press Enter or click outside to save"
-                  />
+                {/* Auto-calculated Profit Margin Breakdown */}
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3 bg-slate-950 p-3 border border-slate-800 rounded-xl shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Calculated Margin</span>
+                    <span className={`text-sm font-extrabold font-mono mt-0.5 ${profitMargin >= 0 ? 'text-teal-400' : 'text-rose-500'}`}>
+                      ₹{profitMargin.toLocaleString()}
+                      <span className="text-xs font-bold ml-1.5 opacity-85">({profitPercent}%)</span>
+                    </span>
+                  </div>
+                  <div className="hidden md:block h-6 w-px bg-slate-800 mx-1"></div>
+                  <div className="text-[10px] font-medium text-slate-400 leading-normal">
+                    Formula: <span className="text-slate-300 font-semibold font-mono">₹{totalAmount.toLocaleString()}</span> (Pkg) - <span className="text-slate-300 font-semibold font-mono">₹{((booking.services || []).filter(s => s.serviceStatus !== 'Cancelled No Charges').reduce((sum, s) => sum + (s.b2bCost || 0), 0)).toLocaleString()}</span> (B2B Costs)
+                  </div>
                 </div>
               </div>
 
@@ -1609,13 +1616,140 @@ const BookingDetails = () => {
                   </table>
                 </div>
 
-                {/* Bottom placeholder: Payments related to Service */}
+                {/* Bottom: Payments related to Service */}
                 <div className="pt-6 border-t border-slate-850">
-                  <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider">Payments related to Service</h3>
-                  <p className="text-xs text-slate-600 italic mt-1">No services payments recorded.</p>
+                  <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Payments related to Service</h3>
+                  {(() => {
+                    const allServicePayments = [];
+                    (booking.services || []).forEach(svc => {
+                      (svc.payments || []).forEach(p => {
+                        allServicePayments.push({
+                          ...p,
+                          _serviceId: svc.serviceId,
+                          _supplierType: svc.supplierType,
+                          _supplierName: svc.supplierName || svc.outsourceName || 'Unknown',
+                          _supplierSupplierId: svc.supplierSupplierId
+                        });
+                      });
+                    });
+                    if (allServicePayments.length === 0) {
+                      return <p className="text-xs text-slate-600 italic mt-1">No service payments recorded.</p>;
+                    }
+                    return (
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto shadow-inner">
+                        <table className="w-full text-left border-collapse min-w-[900px]">
+                          <thead>
+                            <tr className="border-b border-slate-850 text-xs uppercase font-extrabold text-slate-500 bg-slate-900">
+                              <th className="py-3 px-4">Payment ID</th>
+                              <th className="py-3 px-3">Service</th>
+                              <th className="py-3 px-3">Supplier</th>
+                              <th className="py-3 px-3">Date</th>
+                              <th className="py-3 px-3">From/To</th>
+                              <th className="py-3 px-3">Amount</th>
+                              <th className="py-3 px-3">Mode</th>
+                              <th className="py-3 px-3">Status</th>
+                              <th className="py-3 px-3">Added By</th>
+                              <th className="py-3 px-3">Screenshot</th>
+                              {user?.role === 'admin' && <th className="py-3 px-4 text-center">Action</th>}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-850">
+                            {allServicePayments.map(sp => (
+                              <tr key={sp.paymentId} className="text-xs text-slate-300 hover:bg-slate-900/40 transition-colors">
+                                <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">{sp.paymentId}</td>
+                                <td className="py-3.5 px-3">
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase">{sp._supplierType}</span>
+                                  <div className="text-[10px] text-slate-600 font-mono">{sp._serviceId}</div>
+                                </td>
+                                <td className="py-3.5 px-3 font-semibold">
+                                  {sp._supplierSupplierId ? (
+                                    <Link to={`/supplier/${sp._supplierSupplierId}`} className="text-indigo-400 hover:text-indigo-300 hover:underline">
+                                      {sp._supplierName}
+                                    </Link>
+                                  ) : (
+                                    sp._supplierName
+                                  )}
+                                </td>
+                                <td className="py-3.5 px-3 font-semibold">{formatDate(sp.paymentDate)}</td>
+                                <td className="py-3.5 px-3 font-semibold text-slate-205">{sp.paymentFrom} → {sp.paymentTo}</td>
+                                <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{(sp.paidAmount || 0).toLocaleString()}</td>
+                                <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{sp.paymentMode}</td>
+                                <td className="py-3.5 px-3">
+                                  <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${
+                                    sp.status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25' :
+                                    sp.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-600 border-rose-500/25' :
+                                    'bg-amber-500/10 text-amber-600 border-amber-500/25'
+                                  }`}>
+                                    {sp.status}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-3 font-semibold text-slate-400">{sp.addedBy}</td>
+                                <td className="py-3.5 px-3">
+                                  {sp.screenshot ? (
+                                    <button onClick={() => setSelectedScreenshot(sp.screenshot)} className="text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer">OPEN</button>
+                                  ) : (
+                                    <span className="text-slate-600">—</span>
+                                  )}
+                                </td>
+                                {user?.role === 'admin' && (
+                                  <td className="py-3.5 px-4 text-center">
+                                    {sp.status === 'VERIFICATION-REQUIRED' && (
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${sp._serviceId}/payment/${sp.paymentId}/verify`, {
+                                                method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ status: 'VERIFIED' })
+                                              });
+                                              const d = await res.json();
+                                              if (d.success) setBooking(d.data);
+                                            } catch (e) { console.error(e); }
+                                          }}
+                                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                        >Verify</button>
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${sp._serviceId}/payment/${sp.paymentId}/verify`, {
+                                                method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                                body: JSON.stringify({ status: 'REJECTED' })
+                                              });
+                                              const d = await res.json();
+                                              if (d.success) setBooking(d.data);
+                                            } catch (e) { console.error(e); }
+                                          }}
+                                          className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                        >Reject</button>
+                                      </div>
+                                    )}
+                                    {sp.status !== 'VERIFICATION-REQUIRED' && (
+                                      <span className="text-slate-600">—</span>
+                                    )}
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {/* TAB 3: SERVICES */}
+          {activeTab === 'services' && (
+            <div className="h-full min-h-[480px]">
+              <ServiceOptionsTab
+                booking={booking}
+                token={token}
+                onServiceUpdated={(updatedBooking) => setBooking(updatedBooking)}
+                user={user}
+              />
             </div>
           )}
 

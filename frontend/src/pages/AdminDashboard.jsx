@@ -228,9 +228,13 @@ const AdminDashboard = () => {
   };
 
   // Verify payment action
-  const handleVerifyPayment = async (bookingObjectId, paymentId) => {
+  const handleVerifyPayment = async (bookingObjectId, paymentId, isServicePayment, serviceId) => {
     try {
-      const res = await fetch(`${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`, {
+      const url = isServicePayment
+        ? `${API_BASE}/api/bookings/${bookingObjectId}/services/${serviceId}/payment/${paymentId}/verify`
+        : `${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`;
+
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -243,7 +247,7 @@ const AdminDashboard = () => {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
         // If booking was auto-confirmed (first payment verified on a Pending booking),
         // remove it from pending bookings list as well
-        if (data.autoConfirmed) {
+        if (!isServicePayment && data.autoConfirmed) {
           setPendingBookings(prev => prev.filter(b => b._id !== bookingObjectId));
           setSuccessModal({ isOpen: true, message: 'Payment verified successfully! Booking has been auto-confirmed and removed from pending bookings.' });
         } else {
@@ -259,11 +263,15 @@ const AdminDashboard = () => {
   };
 
   // Reject payment action
-  const handleRejectPayment = async (bookingObjectId, paymentId) => {
+  const handleRejectPayment = async (bookingObjectId, paymentId, isServicePayment, serviceId) => {
     const reason = prompt('Please enter rejection reason (optional):');
     if (reason === null) return; // User cancelled
     try {
-      const res = await fetch(`${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`, {
+      const url = isServicePayment
+        ? `${API_BASE}/api/bookings/${bookingObjectId}/services/${serviceId}/payment/${paymentId}/verify`
+        : `${API_BASE}/api/bookings/${bookingObjectId}/verify-payment/${paymentId}`;
+
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -690,7 +698,18 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex flex-col space-y-0.5">
-                                <span className="font-semibold text-slate-100">{p.travellerName}</span>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-slate-100">{p.travellerName}</span>
+                                  {p.isServicePayment ? (
+                                    <span className="text-[9px] uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                      Supplier Pay
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] uppercase font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                                      Traveler Pay
+                                    </span>
+                                  )}
+                                </div>
                                 <span className="text-xs text-slate-500 flex items-center gap-1">
                                   <MapPin className="w-3.5 h-3.5 text-indigo-650" /> {p.packageName}
                                 </span>
@@ -738,7 +757,7 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <div className="flex items-center justify-center space-x-2">
                                 <button
-                                  onClick={() => handleVerifyPayment(p.bookingObjectId, p.paymentId)}
+                                  onClick={() => handleVerifyPayment(p.bookingObjectId, p.paymentId, p.isServicePayment, p.serviceId)}
                                   className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 text-xs font-bold transition-all cursor-pointer"
                                   title="Approve Payment"
                                 >
@@ -747,7 +766,7 @@ const AdminDashboard = () => {
                                 </button>
                                 
                                 <button
-                                  onClick={() => handleRejectPayment(p.bookingObjectId, p.paymentId)}
+                                  onClick={() => handleRejectPayment(p.bookingObjectId, p.paymentId, p.isServicePayment, p.serviceId)}
                                   className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-rose-500/10 text-rose-455 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all cursor-pointer"
                                   title="Reject Payment"
                                 >

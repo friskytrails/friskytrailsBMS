@@ -13,6 +13,9 @@ import Dashboard from './pages/Dashboard';
 import CreateBooking from './pages/CreateBooking';
 import AdminDashboard from './pages/AdminDashboard';
 import BookingDetails from './pages/BookingDetails';
+import AddSupplier from './pages/AddSupplier';
+import SearchSuppliers from './pages/SearchSuppliers';
+import SupplierDetails from './pages/SupplierDetails';
 
 function App() {
   return (
@@ -66,6 +69,30 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <BookingDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/add-supplier"
+                element={
+                  <ProtectedRoute>
+                    <AddSupplier />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/search-suppliers"
+                element={
+                  <ProtectedRoute>
+                    <SearchSuppliers />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/supplier/:supplierId"
+                element={
+                  <ProtectedRoute>
+                    <SupplierDetails />
                   </ProtectedRoute>
                 }
               />

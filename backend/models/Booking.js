@@ -60,6 +60,89 @@ const PaymentSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+// --- Service Payment Schema (payments linked to a supplier service) ---
+const ServicePaymentSchema = new mongoose.Schema({
+  paymentId: { type: String, required: true },
+  paymentDate: { type: Date, required: true, default: Date.now },
+  paymentFrom: {
+    type: String, required: true,
+    enum: ['Traveller', 'Company', 'Supplier'], default: 'Company',
+  },
+  paymentTo: {
+    type: String, required: true,
+    enum: ['Traveller', 'Company', 'Supplier'], default: 'Supplier',
+  },
+  paidAmount: { type: Number, required: true, min: 0 },
+  paymentMode: {
+    type: String, required: true,
+    enum: ['Direct Cash', 'Account'], default: 'Account',
+  },
+  accountSubMode: { type: String, default: '' },
+  screenshot: { type: String },
+  screenshotName: { type: String },
+  status: {
+    type: String,
+    enum: ['VERIFICATION-REQUIRED', 'VERIFIED', 'REJECTED'],
+    default: 'VERIFICATION-REQUIRED',
+  },
+  addedBy: { type: String, required: true },
+  details: { type: String, trim: true, default: '' },
+  verified: { type: Boolean, default: false },
+}, { timestamps: true });
+
+// --- Service Schema (supplier services attached to a booking) ---
+const ServiceSchema = new mongoose.Schema({
+  serviceId: { type: String, required: true },
+  supplierType: {
+    type: String, required: true,
+    enum: ['Hotels', 'Transport', 'Adventure', 'Guides', 'Outsourced'],
+  },
+
+  // Linked supplier reference
+  supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
+  supplierName: { type: String, default: '' },
+  supplierSupplierId: { type: String, default: '' }, // Supplier's SUP-XXXX ID
+
+  // Common fields
+  b2bCost: { type: Number, default: 0 },
+  collectionBySupplier: { type: Number, default: 0 },
+  totalDue: { type: Number, default: 0 },
+  startDate: { type: Date },
+  endDate: { type: Date },
+  adults: { type: Number, default: 0 },
+  children: { type: Number, default: 0 },
+
+  // Hotel-specific
+  mealPlan: { type: String, enum: ['EP', 'CP', 'MAP', 'AP', ''], default: '' },
+  roomType: { type: String, default: '' },
+  numberOfRooms: { type: Number, default: 0 },
+
+  // Transport-specific
+  transportType: {
+    type: String,
+    enum: ['Hatchback', 'Sedan', 'Ertiga', 'Innova', 'Winger', '13 Seater', '17 Seater', '20 Seater', '26 Seater', 'Bus', ''],
+    default: '',
+  },
+
+  // Adventure-specific
+  productName: { type: String, default: '' },
+  packageName: { type: String, default: '' },
+
+  // Outsourced-specific
+  outsourceName: { type: String, default: '' },
+
+  serviceStatus: {
+    type: String,
+    enum: ['Pending', 'Booked', 'Completed', 'Cancelled Booking Charges', 'Cancelled No Charges'],
+    default: 'Pending',
+  },
+
+  payments: { type: [ServicePaymentSchema], default: [] },
+
+  addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  addedByName: { type: String, default: '' },
+}, { timestamps: true });
+
 const BookingSchema = new mongoose.Schema({
   bookingId: {
     type: String,
@@ -185,6 +268,10 @@ const BookingSchema = new mongoose.Schema({
     type: [PaymentSchema],
     default: [],
   },
+  services: {
+    type: [ServiceSchema],
+    default: [],
+  },
   profitMargin: {
     type: Number,
     default: 0,
@@ -277,10 +364,10 @@ BookingSchema.pre('validate', async function (next) {
   ensureInitialPayment(this);
   ensureTasksChecklist(this);
 
-  // Calculate Paid Amount dynamically based on verified sub-payments
+  // Calculate Paid Amount dynamically based on verified sub-payments from TRAVELER only
   if (this.payments && this.payments.length > 0) {
     this.paidAmount = this.payments
-      .filter(p => p.status === 'VERIFIED')
+      .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
       .reduce((sum, p) => sum + p.amountPaid, 0);
   } else {
     this.paidAmount = 0;
@@ -290,6 +377,22 @@ BookingSchema.pre('validate', async function (next) {
   if (this.totalAmount !== undefined && this.paidAmount !== undefined) {
     this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
   }
+
+  // Recalculate totalDue for each service based on verified service payments
+  if (this.services && this.services.length > 0) {
+    this.services.forEach(s => {
+      const verifiedPaymentsSum = (s.payments || [])
+        .filter(p => p.status === 'VERIFIED')
+        .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+      s.totalDue = Math.max(0, (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum);
+    });
+  }
+
+  // Calculate Profit Margin: totalAmount - sum of b2bCost of active (non-cancelled no charges) services
+  const activeB2BCost = (this.services || [])
+    .filter(s => s.serviceStatus !== 'Cancelled No Charges')
+    .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
+  this.profitMargin = (this.totalAmount || 0) - activeB2BCost;
 
   // Generate Booking ID if not exists
   if (!this.bookingId) {
@@ -335,12 +438,10 @@ BookingSchema.post('init', function (doc) {
   ensureInitialPayment(doc);
   ensureTasksChecklist(doc);
 
-  // Recalculate paidAmount from VERIFIED payments only (mirrors pre-validate logic).
-  // This ensures loaded documents always reflect the correct verified total,
-  // even if the stored paidAmount in the DB is stale or was written by older code.
+  // Recalculate paidAmount from VERIFIED TRAVELER payments only
   if (doc.payments && doc.payments.length > 0) {
     doc.paidAmount = doc.payments
-      .filter(p => p.status === 'VERIFIED')
+      .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
       .reduce((sum, p) => sum + p.amountPaid, 0);
   } else if (doc.payments) {
     // payments array exists but is empty — nothing verified
@@ -350,6 +451,21 @@ BookingSchema.post('init', function (doc) {
   if (doc.totalAmount !== undefined && doc.paidAmount !== undefined) {
     doc.dueAmount = Math.max(0, doc.totalAmount - doc.paidAmount);
   }
+  // Recalculate totalDue for each service based on verified service payments
+  if (doc.services && doc.services.length > 0) {
+    doc.services.forEach(s => {
+      const verifiedPaymentsSum = (s.payments || [])
+        .filter(p => p.status === 'VERIFIED')
+        .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+      s.totalDue = Math.max(0, (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum);
+    });
+  }
+
+  // Recalculate Profit Margin dynamically
+  const activeB2BCost = (doc.services || [])
+    .filter(s => s.serviceStatus !== 'Cancelled No Charges')
+    .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
+  doc.profitMargin = (doc.totalAmount || 0) - activeB2BCost;
 });
 
 BookingSchema.index({ travellerName: 1 });

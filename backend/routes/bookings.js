@@ -249,8 +249,13 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
 // @access  Private & Admin
 router.get('/pending-payments', protect, adminOnly, async (req, res) => {
   try {
-    const bookings = await Booking.find({ 'payments.status': 'VERIFICATION-REQUIRED' })
-      .select('bookingId travellerName travellerEmail travellerPhone packageName location payments')
+    const bookings = await Booking.find({
+      $or: [
+        { 'payments.status': 'VERIFICATION-REQUIRED' },
+        { 'services.payments.status': 'VERIFICATION-REQUIRED' }
+      ]
+    })
+      .select('bookingId travellerName travellerEmail travellerPhone packageName location payments services')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 })
       .lean();
@@ -258,29 +263,66 @@ router.get('/pending-payments', protect, adminOnly, async (req, res) => {
     // Extract all payments that are pending verification
     let pendingPayments = [];
     bookings.forEach(booking => {
-      booking.payments.forEach(payment => {
-        if (payment.status === 'VERIFICATION-REQUIRED') {
-          pendingPayments.push({
-            bookingObjectId: booking._id,
-            bookingId: booking.bookingId,
-            travellerName: booking.travellerName,
-            packageName: booking.packageName,
-            location: booking.location,
-            paymentId: payment.paymentId || payment._id,
-            _id: payment._id,
-            paymentDate: payment.paymentDate,
-            paymentFrom: payment.paymentFrom,
-            paymentTo: payment.paymentTo,
-            amountPaid: payment.amountPaid,
-            paymentMode: payment.paymentMode,
-            status: payment.status,
-            addedBy: payment.addedBy,
-            attachment: payment.attachment,
-            attachmentName: payment.attachmentName,
-            details: payment.details
-          });
-        }
-      });
+      // 1. Booking payments
+      if (booking.payments && booking.payments.length > 0) {
+        booking.payments.forEach(payment => {
+          if (payment.status === 'VERIFICATION-REQUIRED') {
+            pendingPayments.push({
+              bookingObjectId: booking._id,
+              bookingId: booking.bookingId,
+              travellerName: booking.travellerName,
+              packageName: booking.packageName,
+              location: booking.location,
+              paymentId: payment.paymentId || payment._id,
+              _id: payment._id,
+              paymentDate: payment.paymentDate,
+              paymentFrom: payment.paymentFrom,
+              paymentTo: payment.paymentTo,
+              amountPaid: payment.amountPaid,
+              paymentMode: payment.paymentMode,
+              status: payment.status,
+              addedBy: payment.addedBy,
+              attachment: payment.attachment,
+              attachmentName: payment.attachmentName,
+              details: payment.details,
+              isServicePayment: false
+            });
+          }
+        });
+      }
+
+      // 2. Service payments
+      if (booking.services && booking.services.length > 0) {
+        booking.services.forEach(service => {
+          if (service.payments && service.payments.length > 0) {
+            service.payments.forEach(payment => {
+              if (payment.status === 'VERIFICATION-REQUIRED') {
+                pendingPayments.push({
+                  bookingObjectId: booking._id,
+                  bookingId: booking.bookingId,
+                  travellerName: `${booking.travellerName} (${service.supplierType}: ${service.supplierName || 'Unknown'})`,
+                  packageName: booking.packageName,
+                  location: booking.location,
+                  paymentId: payment.paymentId || payment._id,
+                  _id: payment._id,
+                  paymentDate: payment.paymentDate,
+                  paymentFrom: payment.paymentFrom,
+                  paymentTo: payment.paymentTo,
+                  amountPaid: payment.paidAmount, // service payment amount field
+                  paymentMode: payment.paymentMode,
+                  status: payment.status,
+                  addedBy: payment.addedBy,
+                  attachment: payment.screenshot, // service payment attachment field
+                  attachmentName: payment.screenshotName,
+                  details: payment.details,
+                  isServicePayment: true,
+                  serviceId: service.serviceId
+                });
+              }
+            });
+          }
+        });
+      }
     });
 
     // Sort by payment date descending
@@ -806,7 +848,7 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
     // in sync by the model, but calculate from payment records here as an
     // additional guard against stale/legacy booking values.
     const verifiedAmount = booking.payments
-      .filter(payment => payment.status === 'VERIFIED')
+      .filter(payment => payment.status === 'VERIFIED' && payment.paymentFrom === 'TRAVELER')
       .reduce((sum, payment) => sum + payment.amountPaid, 0);
     const currentDue = Math.max(0, booking.totalAmount - verifiedAmount);
     if (newPayment > currentDue) {
@@ -997,13 +1039,13 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
 
       if (status === 'VERIFIED' || action === 'approve') {
         const wasBookingPending = booking.status === 'Pending';
-        const isFirstVerifiedPayment = !booking.payments.some(p => p.status === 'VERIFIED');
+        const isFirstVerifiedPayment = !booking.payments.some(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER');
         payment.status = 'VERIFIED';
         payment.verified = true;
 
         // Recalculate Booking totalPaid and dueAmount
         booking.paidAmount = booking.payments
-          .filter(p => p.status === 'VERIFIED')
+          .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
@@ -1027,7 +1069,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
 
         // Recalculate Booking totalPaid and dueAmount
         booking.paidAmount = booking.payments
-          .filter(p => p.status === 'VERIFIED')
+          .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
@@ -1133,6 +1175,396 @@ router.patch('/:id/toggle-task', protect, verifiedOnly, async (req, res) => {
     });
   } catch (error) {
     console.error('Toggle task error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================================
+// SERVICE OPTIONS — CRUD for services attached to a booking
+// ============================================================
+
+// @desc    Add a service to a booking
+// @route   POST /api/bookings/:id/services
+// @access  Private & Verified
+router.post('/:id/services', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Permission check
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const {
+      supplierType, supplier, supplierName, supplierSupplierId,
+      b2bCost, collectionBySupplier, startDate, endDate, adults, children,
+      mealPlan, roomType, numberOfRooms,
+      transportType,
+      productName, packageName,
+      outsourceName,
+    } = req.body;
+
+    if (!supplierType) {
+      return res.status(400).json({ success: false, message: 'Supplier type is required' });
+    }
+
+    // Generate unique service ID (SVC-XXXXXX)
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const serviceId = `SVC-${randomPart}`;
+
+    const b2b = Number(b2bCost) || 0;
+    const collection = Number(collectionBySupplier) || 0;
+
+    const newService = {
+      serviceId,
+      supplierType,
+      supplier: supplier || undefined,
+      supplierName: supplierName || '',
+      supplierSupplierId: supplierSupplierId || '',
+      b2bCost: b2b,
+      collectionBySupplier: collection,
+      totalDue: Math.max(0, b2b - collection),
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      adults: Number(adults) || 0,
+      children: Number(children) || 0,
+      mealPlan: mealPlan || '',
+      roomType: roomType || '',
+      numberOfRooms: Number(numberOfRooms) || 0,
+      transportType: transportType || '',
+      productName: productName || '',
+      packageName: packageName || '',
+      outsourceName: outsourceName || '',
+      serviceStatus: 'Pending',
+      payments: [],
+      addedBy: req.user._id,
+      addedByName: req.user.name,
+    };
+
+    booking.services.push(newService);
+
+    // Audit comment
+    booking.comments.push({
+      senderName: `System / ${req.user.name}`,
+      message: `Service Added: ${supplierType} service (${serviceId})${supplierName ? ` — Supplier: ${supplierName}` : ''}, B2B Cost: ₹${b2b}`,
+      timestamp: new Date(),
+    });
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.status(201).json({ success: true, message: `Service ${serviceId} added`, data: updatedBooking });
+  } catch (error) {
+    console.error('Add service error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Edit a service
+// @route   PUT /api/bookings/:id/services/:serviceId
+// @access  Private & Verified
+router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const service = booking.services.find(s => s.serviceId === req.params.serviceId);
+    if (!service) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+
+    const {
+      supplierType, supplier, supplierName, supplierSupplierId,
+      b2bCost, collectionBySupplier, startDate, endDate, adults, children,
+      mealPlan, roomType, numberOfRooms,
+      transportType,
+      productName, packageName,
+      outsourceName, serviceStatus,
+    } = req.body;
+
+    if (supplierType) service.supplierType = supplierType;
+    if (supplier !== undefined) service.supplier = supplier || undefined;
+    if (supplierName !== undefined) service.supplierName = supplierName;
+    if (supplierSupplierId !== undefined) service.supplierSupplierId = supplierSupplierId;
+    if (b2bCost !== undefined) service.b2bCost = Number(b2bCost) || 0;
+    if (collectionBySupplier !== undefined) service.collectionBySupplier = Number(collectionBySupplier) || 0;
+    const verifiedPaymentsSum = (service.payments || [])
+      .filter(p => p.status === 'VERIFIED')
+      .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+    service.totalDue = Math.max(0, service.b2bCost - service.collectionBySupplier - verifiedPaymentsSum);
+    if (startDate !== undefined) service.startDate = startDate || undefined;
+    if (endDate !== undefined) service.endDate = endDate || undefined;
+    if (adults !== undefined) service.adults = Number(adults) || 0;
+    if (children !== undefined) service.children = Number(children) || 0;
+    if (mealPlan !== undefined) service.mealPlan = mealPlan;
+    if (roomType !== undefined) service.roomType = roomType;
+    if (numberOfRooms !== undefined) service.numberOfRooms = Number(numberOfRooms) || 0;
+    if (transportType !== undefined) service.transportType = transportType;
+    if (productName !== undefined) service.productName = productName;
+    if (packageName !== undefined) service.packageName = packageName;
+    if (outsourceName !== undefined) service.outsourceName = outsourceName;
+    if (serviceStatus) service.serviceStatus = serviceStatus;
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({ success: true, message: 'Service updated', data: updatedBooking });
+  } catch (error) {
+    console.error('Edit service error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Update service status
+// @route   PATCH /api/bookings/:id/services/:serviceId/status
+// @access  Private & Verified
+router.patch('/:id/services/:serviceId/status', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const service = booking.services.find(s => s.serviceId === req.params.serviceId);
+    if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
+
+    const { serviceStatus } = req.body;
+    const validStatuses = ['Pending', 'Booked', 'Completed', 'Cancelled Booking Charges', 'Cancelled No Charges'];
+    if (!validStatuses.includes(serviceStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid service status' });
+    }
+
+    service.serviceStatus = serviceStatus;
+
+    booking.comments.push({
+      senderName: `System / ${req.user.name}`,
+      message: `Service ${service.serviceId} status changed to "${serviceStatus}"`,
+      timestamp: new Date(),
+    });
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({ success: true, data: updatedBooking });
+  } catch (error) {
+    console.error('Update service status error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Add payment to a service
+// @route   POST /api/bookings/:id/services/:serviceId/payment
+// @access  Private & Verified
+router.post('/:id/services/:serviceId/payment', protect, verifiedOnly, upload.single('screenshot'), async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const service = booking.services.find(s => s.serviceId === req.params.serviceId);
+    if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
+
+    const { paymentDate, paymentFrom, paymentTo, paidAmount, paymentMode, accountSubMode, details } = req.body;
+
+    if (!paidAmount || Number(paidAmount) <= 0) {
+      return res.status(400).json({ success: false, message: 'Paid amount must be positive' });
+    }
+
+    // If Account mode, screenshot is mandatory
+    if (paymentMode === 'Account' && !req.file) {
+      return res.status(400).json({ success: false, message: 'Screenshot is mandatory for Account payment mode' });
+    }
+
+    const spayId = `SPAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    const newPayment = {
+      paymentId: spayId,
+      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+      paymentFrom: paymentFrom || 'Company',
+      paymentTo: paymentTo || 'Supplier',
+      paidAmount: Number(paidAmount),
+      paymentMode: paymentMode || 'Account',
+      accountSubMode: accountSubMode || '',
+      screenshot: req.file ? req.file.path : '',
+      screenshotName: req.file ? req.file.originalname : '',
+      status: 'VERIFICATION-REQUIRED',
+      addedBy: req.user.name,
+      details: details || '',
+      verified: false,
+    };
+
+    service.payments.push(newPayment);
+
+    // Audit comment
+    booking.comments.push({
+      senderName: `System / ${req.user.name}`,
+      message: `Service Payment Added: ${spayId} for service ${service.serviceId} (${service.supplierType}) — ₹${newPayment.paidAmount} from ${newPayment.paymentFrom} to ${newPayment.paymentTo}. Requires Admin verification.`,
+      timestamp: new Date(),
+    });
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.status(201).json({ success: true, message: `Payment ${spayId} added to service`, data: updatedBooking });
+  } catch (error) {
+    console.error('Add service payment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Verify / reject a service payment (Admin only)
+// @route   PATCH /api/bookings/:id/services/:serviceId/payment/:paymentId/verify
+// @access  Private & Admin
+router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, verifiedOnly, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admins can verify service payments' });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const service = booking.services.find(s => s.serviceId === req.params.serviceId);
+    if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
+
+    const payment = service.payments.find(p => p.paymentId === req.params.paymentId);
+    if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
+
+    const { status, reason } = req.body;
+
+    if (status === 'VERIFIED') {
+      payment.status = 'VERIFIED';
+      payment.verified = true;
+      booking.comments.push({
+        senderName: `System / ${req.user.name}`,
+        message: `Service Payment Verified: ${payment.paymentId} (₹${payment.paidAmount}) for service ${service.serviceId}`,
+        timestamp: new Date(),
+      });
+    } else if (status === 'REJECTED') {
+      payment.status = 'REJECTED';
+      payment.verified = false;
+      booking.comments.push({
+        senderName: `System / ${req.user.name}`,
+        message: `Service Payment Rejected: ${payment.paymentId} (₹${payment.paidAmount}) for service ${service.serviceId}. Reason: ${reason || 'No reason'}`,
+        timestamp: new Date(),
+      });
+    }
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.json({ success: true, data: updatedBooking });
+  } catch (error) {
+    console.error('Verify service payment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @desc    Generate a payment ID for company-to-supplier payment request
+// @route   POST /api/bookings/:id/services/:serviceId/generate-payment-id
+// @access  Private & Verified
+router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const service = booking.services.find(s => s.serviceId === req.params.serviceId);
+    if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
+
+    const { amount, details } = req.body;
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, message: 'Amount is required' });
+    }
+
+    const gpayId = `GPAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    const paymentEntry = {
+      paymentId: gpayId,
+      paymentDate: new Date(),
+      paymentFrom: 'Company',
+      paymentTo: 'Supplier',
+      paidAmount: Number(amount),
+      paymentMode: 'Account',
+      accountSubMode: '',
+      screenshot: '',
+      screenshotName: '',
+      status: 'VERIFICATION-REQUIRED',
+      addedBy: req.user.name,
+      details: details || `Payment request generated by ${req.user.name}`,
+      verified: false,
+    };
+
+    service.payments.push(paymentEntry);
+
+    booking.comments.push({
+      senderName: `System / ${req.user.name}`,
+      message: `Payment ID Generated: ${gpayId} for service ${service.serviceId} — ₹${paymentEntry.paidAmount} (Company → Supplier). Pending admin verification.`,
+      timestamp: new Date(),
+    });
+
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role');
+
+    res.status(201).json({ success: true, message: `Payment ID ${gpayId} generated`, paymentId: gpayId, data: updatedBooking });
+  } catch (error) {
+    console.error('Generate payment ID error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

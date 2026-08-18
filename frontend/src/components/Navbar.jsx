@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { CalendarCheck, LogOut, LayoutDashboard, FileSpreadsheet, ShieldAlert, Sun, Moon } from 'lucide-react';
+import { CalendarCheck, LogOut, LayoutDashboard, FileSpreadsheet, ShieldAlert, Sun, Moon, Truck, Store } from 'lucide-react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -76,6 +76,19 @@ const Navbar = () => {
                       <FileSpreadsheet className="w-4 h-4" />
                       <span>New Booking</span>
                     </Link>
+                  )}
+
+                  {(user.role === 'employee' || user.role === 'admin') && (
+                    <>
+                      <Link to="/add-supplier" className={navLinkClass('/add-supplier')}>
+                        <Truck className="w-4 h-4" />
+                        <span>Add Supplier</span>
+                      </Link>
+                      <Link to="/search-suppliers" className={navLinkClass('/search-suppliers')}>
+                        <Store className="w-4 h-4" />
+                        <span>Search Suppliers</span>
+                      </Link>
+                    </>
                   )}
                 </div>
               ) : (
