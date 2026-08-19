@@ -164,7 +164,7 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
 router.get('/search', protect, verifiedOnly, async (req, res) => {
   try {
     let query = {};
-    const { bookingId, paymentId, travellerName, travellerPhone, transactionId, startDate, endDate, location, status, bookingDate } = req.query;
+    const { bookingId, paymentId, travellerName, travellerPhone, transactionId, startDate, endDate, location, status, bookingDate, bookingDateStart, bookingDateEnd } = req.query;
 
     if (bookingId) {
       query.bookingId = bookingId.trim();
@@ -185,8 +185,20 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
       query.location = { $regex: location.trim(), $options: 'i' };
     }
 
-    // Filter by booking creation date (createdAt)
-    if (bookingDate) {
+    // Filter by booking creation date (createdAt) range or single date
+    if (bookingDateStart || bookingDateEnd) {
+      query.createdAt = {};
+      if (bookingDateStart) {
+        const start = new Date(bookingDateStart);
+        start.setUTCHours(0, 0, 0, 0);
+        query.createdAt.$gte = start;
+      }
+      if (bookingDateEnd) {
+        const end = new Date(bookingDateEnd);
+        end.setUTCHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    } else if (bookingDate) {
       const dayStart = new Date(bookingDate);
       dayStart.setUTCHours(0, 0, 0, 0);
       const dayEnd = new Date(bookingDate);

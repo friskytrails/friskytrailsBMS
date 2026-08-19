@@ -27,7 +27,8 @@ const SearchDashboard = () => {
     travellerName: '',
     travellerPhone: '',
     transactionId: '',
-    bookingDate: '',
+    bookingDateStart: '',
+    bookingDateEnd: '',
     startDate: '',
     endDate: '',
     location: '',
@@ -82,7 +83,8 @@ const SearchDashboard = () => {
       travellerName: '',
       travellerPhone: '',
       transactionId: '',
-      bookingDate: '',
+      bookingDateStart: '',
+      bookingDateEnd: '',
       startDate: '',
       endDate: '',
       location: '',
@@ -141,6 +143,13 @@ const SearchDashboard = () => {
     });
   };
 
+  const isRangeSet = (filters.bookingDateStart && filters.bookingDateEnd) || (filters.startDate && filters.endDate);
+  const showAdminTotals = user?.role === 'admin' && searched && isRangeSet && bookings.length > 0;
+
+  const totalPackageCost = bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+  const totalPaidAmount = bookings.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
+  const totalDueAmount = bookings.reduce((sum, b) => sum + (b.dueAmount || 0), 0);
+
   return (
     <div className="space-y-8">
 
@@ -169,14 +178,28 @@ const SearchDashboard = () => {
             </div>
           </div>
 
-          {/* Booking Date (createdAt) */}
+          {/* Booking Date Start */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date (From)</label>
             <div className="relative">
               <input
                 type="date"
-                name="bookingDate"
-                value={filters.bookingDate}
+                name="bookingDateStart"
+                value={filters.bookingDateStart}
+                onChange={handleInputChange}
+                className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Booking Date End */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Date (To)</label>
+            <div className="relative">
+              <input
+                type="date"
+                name="bookingDateEnd"
+                value={filters.bookingDateEnd}
                 onChange={handleInputChange}
                 className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors"
               />
@@ -330,6 +353,50 @@ const SearchDashboard = () => {
           </div>
         </div>
       </form>
+
+      {/* Admin Totals Overview (Range Search only) */}
+      {showAdminTotals && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-900 border border-slate-800/80 rounded-2xl p-5 shadow-xl">
+          {/* Total Package Cost Card */}
+          <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between hover:border-blue-500/30 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Total Package Cost</span>
+              <span className="text-2xl font-black text-orange-400 font-mono tracking-tight block">
+                ₹{totalPackageCost.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-orange-400">
+              <FileText className="w-5 h-5 text-indigo-500" />
+            </div>
+          </div>
+
+          {/* Total Paid Amount Card */}
+          <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between hover:border-emerald-500/30 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Total Paid Amount</span>
+              <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight block">
+                ₹{totalPaidAmount.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+          </div>
+
+          {/* Total Due Amount Card */}
+          <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between hover:border-rose-500/30 transition-all duration-300">
+            <div className="space-y-1">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Total Due Amount</span>
+              <span className={`text-2xl font-black font-mono tracking-tight block ${totalDueAmount > 0 ? 'text-rose-500' : 'text-slate-400'}`}>
+                ₹{totalDueAmount.toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-500">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error View */}
       {error && (
