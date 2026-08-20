@@ -373,6 +373,62 @@ router.get('/pending', protect, adminOnly, async (req, res) => {
   }
 });
 
+// @desc    Get all generated payment IDs (Admin only)
+// @route   GET /api/bookings/generated-payment-ids
+// @access  Private & Admin
+router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
+  try {
+    const bookings = await Booking.find({
+      'services.payments.paymentId': { $regex: /^GPAY-/ }
+    })
+      .select('bookingId travellerName travellerEmail travellerPhone packageName location services')
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let generatedIds = [];
+    bookings.forEach(booking => {
+      if (booking.services && booking.services.length > 0) {
+        booking.services.forEach(service => {
+          if (service.payments && service.payments.length > 0) {
+            service.payments.forEach(payment => {
+              if (payment.paymentId && payment.paymentId.startsWith('GPAY-')) {
+                generatedIds.push({
+                  bookingObjectId: booking._id,
+                  bookingId: booking.bookingId,
+                  travellerName: booking.travellerName,
+                  packageName: booking.packageName,
+                  location: booking.location,
+                  serviceId: service.serviceId,
+                  supplierType: service.supplierType,
+                  supplierName: service.supplierName,
+                  paymentId: payment.paymentId,
+                  paymentDate: payment.paymentDate,
+                  paymentFrom: payment.paymentFrom,
+                  paymentTo: payment.paymentTo,
+                  paidAmount: payment.paidAmount,
+                  status: payment.status,
+                  addedBy: payment.addedBy,
+                  details: payment.details
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      count: generatedIds.length,
+      data: generatedIds,
+    });
+  } catch (error) {
+    console.error('Get generated payment IDs error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // @desc    Confirm booking (Admin only)
 // @route   PATCH /api/bookings/confirm/:id
 // @access  Private & Admin
@@ -1056,9 +1112,20 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         payment.verified = true;
 
         // Recalculate Booking totalPaid and dueAmount
-        booking.paidAmount = booking.payments
+        let currentPaidAmount = booking.payments
           .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
+          
+        if (booking.services && booking.services.length > 0) {
+          booking.services.forEach(s => {
+            if (s.payments && s.payments.length > 0) {
+              currentPaidAmount += s.payments
+                .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'Traveller')
+                .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+            }
+          });
+        }
+        booking.paidAmount = currentPaidAmount;
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
         // Update booking status: automatically confirm when a payment is verified
@@ -1080,9 +1147,20 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         payment.verified = false;
 
         // Recalculate Booking totalPaid and dueAmount
-        booking.paidAmount = booking.payments
+        let currentPaidAmountReject = booking.payments
           .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
+          
+        if (booking.services && booking.services.length > 0) {
+          booking.services.forEach(s => {
+            if (s.payments && s.payments.length > 0) {
+              currentPaidAmountReject += s.payments
+                .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'Traveller')
+                .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+            }
+          });
+        }
+        booking.paidAmount = currentPaidAmountReject;
         booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
 
         const rejectionReason = reason || 'No reason provided';
@@ -1536,18 +1614,20 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
     const service = booking.services.find(s => s.serviceId === req.params.serviceId);
     if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
 
-    const { amount, details } = req.body;
+    const { amount, details, paymentFrom, paymentTo } = req.body;
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json({ success: false, message: 'Amount is required' });
     }
 
     const gpayId = `GPAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const pFrom = paymentFrom || 'Company';
+    const pTo = paymentTo || 'Supplier';
 
     const paymentEntry = {
       paymentId: gpayId,
       paymentDate: new Date(),
-      paymentFrom: 'Company',
-      paymentTo: 'Supplier',
+      paymentFrom: pFrom,
+      paymentTo: pTo,
       paidAmount: Number(amount),
       paymentMode: 'Account',
       accountSubMode: '',
@@ -1563,7 +1643,7 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
 
     booking.comments.push({
       senderName: `System / ${req.user.name}`,
-      message: `Payment ID Generated: ${gpayId} for service ${service.serviceId} — ₹${paymentEntry.paidAmount} (Company → Supplier). Pending admin verification.`,
+      message: `Payment ID Generated: ${gpayId} for service ${service.serviceId} — ₹${paymentEntry.paidAmount} (${pFrom} → ${pTo}). Pending admin verification.`,
       timestamp: new Date(),
     });
 

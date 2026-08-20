@@ -364,14 +364,27 @@ BookingSchema.pre('validate', async function (next) {
   ensureInitialPayment(this);
   ensureTasksChecklist(this);
 
-  // Calculate Paid Amount dynamically based on verified sub-payments from TRAVELER only
+  // Calculate Paid Amount dynamically based on verified sub-payments from TRAVELER (Booking payments)
+  // AND verified Service Payments where paymentFrom is 'Traveller'
+  let calculatedPaidAmount = 0;
+
   if (this.payments && this.payments.length > 0) {
-    this.paidAmount = this.payments
+    calculatedPaidAmount += this.payments
       .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
       .reduce((sum, p) => sum + p.amountPaid, 0);
-  } else {
-    this.paidAmount = 0;
   }
+
+  if (this.services && this.services.length > 0) {
+    this.services.forEach(s => {
+      if (s.payments && s.payments.length > 0) {
+        calculatedPaidAmount += s.payments
+          .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'Traveller')
+          .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+      }
+    });
+  }
+
+  this.paidAmount = calculatedPaidAmount;
 
   // Calculate Due Amount
   if (this.totalAmount !== undefined && this.paidAmount !== undefined) {
@@ -438,15 +451,25 @@ BookingSchema.post('init', function (doc) {
   ensureInitialPayment(doc);
   ensureTasksChecklist(doc);
 
-  // Recalculate paidAmount from VERIFIED TRAVELER payments only
+  // Recalculate paidAmount from VERIFIED TRAVELER payments (both main and service payments)
+  let calculatedPaidAmount = 0;
   if (doc.payments && doc.payments.length > 0) {
-    doc.paidAmount = doc.payments
+    calculatedPaidAmount += doc.payments
       .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
       .reduce((sum, p) => sum + p.amountPaid, 0);
-  } else if (doc.payments) {
-    // payments array exists but is empty — nothing verified
-    doc.paidAmount = 0;
   }
+  
+  if (doc.services && doc.services.length > 0) {
+    doc.services.forEach(s => {
+      if (s.payments && s.payments.length > 0) {
+        calculatedPaidAmount += s.payments
+          .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'Traveller')
+          .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+      }
+    });
+  }
+  doc.paidAmount = calculatedPaidAmount;
+
   // Recalculate dueAmount to stay consistent
   if (doc.totalAmount !== undefined && doc.paidAmount !== undefined) {
     doc.dueAmount = Math.max(0, doc.totalAmount - doc.paidAmount);

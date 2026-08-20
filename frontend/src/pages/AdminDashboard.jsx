@@ -19,7 +19,10 @@ import {
   XCircle,
   RefreshCw,
   FileText,
-  CreditCard
+  CreditCard,
+  ZoomIn,
+  ZoomOut,
+  Copy
 } from 'lucide-react';
 import { API_BASE } from '../config';
 
@@ -38,6 +41,7 @@ const AdminDashboard = () => {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const [fetchingScreenshotId, setFetchingScreenshotId] = useState(null);
 
   // State for Payments Tab
@@ -45,6 +49,12 @@ const AdminDashboard = () => {
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [paymentsError, setPaymentsError] = useState('');
   const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
+
+  // State for Generated IDs Tab
+  const [generatedIds, setGeneratedIds] = useState([]);
+  const [generatedIdsLoading, setGeneratedIdsLoading] = useState(true);
+  const [generatedIdsError, setGeneratedIdsError] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
 
   const handleViewScreenshot = async (bookingId, bookingObjectId) => {
     setFetchingScreenshotId(bookingObjectId);
@@ -134,10 +144,32 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchGeneratedIds = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/generated-payment-ids`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGeneratedIds(data.data);
+      } else {
+        setGeneratedIdsError(data.message || 'Failed to load generated IDs');
+      }
+    } catch (err) {
+      console.error('Error fetching generated IDs:', err);
+      setGeneratedIdsError('Connection to server failed');
+    } finally {
+      setGeneratedIdsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchPendingBookings();
     fetchPendingPayments();
+    fetchGeneratedIds();
   }, [token]);
 
   const triggerToggleConfirm = (userItem) => {
@@ -413,6 +445,18 @@ const AdminDashboard = () => {
             <CreditCard className="w-4 h-4" />
             <span>Pending Payments ({pendingPayments.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('generatedIds')}
+            className={`flex items-center space-x-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'generatedIds'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-650/15'
+                : 'text-slate-400 hover:text-slate-205 hover:bg-slate-850/50'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Generated IDs ({generatedIds.length})</span>
+          </button>
         </div>
 
         {/* Main Tabbed Content Area */}
@@ -646,7 +690,7 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'payments' ? (
           <div>
             {paymentsError && (
               <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-center space-x-2 text-sm">
@@ -784,6 +828,143 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+        ) : (
+          <div>
+            {generatedIdsError && (
+              <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-center space-x-2 text-sm">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{generatedIdsError}</span>
+              </div>
+            )}
+
+            {/* Generated Payment IDs Listing */}
+            {generatedIdsLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
+              </div>
+            ) : generatedIds.length === 0 ? (
+              <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-16 text-center shadow-inner flex flex-col items-center justify-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-purple-500">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-100">No Generated Payment IDs</h3>
+                  <p className="text-slate-500 text-sm mt-1 max-w-sm">
+                    There are no payment IDs generated for any services in bookings yet.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-100">Generated Payment IDs</h3>
+                    <p className="text-slate-500 text-sm mt-0.5">List of all generated payment request IDs.</p>
+                  </div>
+                  <button 
+                    onClick={fetchGeneratedIds}
+                    className="p-2 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 transition-all flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span className="text-xs font-semibold">Refresh</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/40 border-b border-slate-800 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="px-6 py-4">Payment ID</th>
+                        <th className="px-6 py-4">Booking</th>
+                        <th className="px-6 py-4">Traveller / Supplier</th>
+                        <th className="px-6 py-4 text-right">Amount</th>
+                        <th className="px-6 py-4 text-center">Direction</th>
+                        <th className="px-6 py-4 text-center">Status</th>
+                        <th className="px-6 py-4">Added By</th>
+                        <th className="px-6 py-4 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850 text-sm text-slate-300">
+                      {generatedIds.map((p) => {
+                        const isCopied = copiedId === p.paymentId;
+                        return (
+                          <tr key={p.paymentId} className="hover:bg-slate-850/20 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                                  {p.paymentId}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(p.paymentId);
+                                    setCopiedId(p.paymentId);
+                                    setTimeout(() => setCopiedId(null), 2000);
+                                  }}
+                                  className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+                                  title="Copy to Clipboard"
+                                >
+                                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <Link 
+                                to={`/booking/${p.bookingId}`} 
+                                className="text-indigo-400 hover:text-indigo-350 font-semibold underline"
+                              >
+                                {p.bookingId}
+                              </Link>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-100">{p.travellerName}</span>
+                                <span className="text-xs text-slate-500">
+                                  {p.supplierType}: {p.supplierName || 'Unknown'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-slate-100">
+                              ₹{p.paidAmount ? p.paidAmount.toLocaleString() : '0'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-xs">
+                              <span className="bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 font-semibold">
+                                {p.paymentFrom} → {p.paymentTo}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center text-xs">
+                              <span 
+                                className={`px-2.5 py-1 rounded-full border font-bold ${
+                                  p.status === 'VERIFIED'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : p.status === 'REJECTED'
+                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                }`}
+                              >
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-slate-400 text-xs">
+                              {p.addedBy}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                              <Link 
+                                to={`/booking/${p.bookingId}`}
+                                className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 text-xs font-semibold transition-all cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Details</span>
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
       </div>
@@ -827,14 +1008,31 @@ const AdminDashboard = () => {
           <div className="relative bg-slate-900 border border-slate-800 max-w-3xl w-full rounded-2xl overflow-hidden shadow-2xl animate-scaleUp">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
               <h3 className="font-bold text-slate-100">Payment Receipt Verification</h3>
-              <button
-                onClick={() => setSelectedScreenshot(null)}
-                className="p-1 rounded-lg bg-slate-850 text-slate-500 hover:text-slate-700 hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setZoomLevel(prev => Math.min(prev + 0.25, 3))}
+                  className="p-1.5 rounded-lg bg-slate-850 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setZoomLevel(prev => Math.max(prev - 0.25, 0.5))}
+                  className="p-1.5 rounded-lg bg-slate-850 text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => { setSelectedScreenshot(null); setZoomLevel(1); }}
+                  className="p-1.5 ml-2 rounded-lg bg-rose-500/10 text-rose-500 hover:text-rose-400 hover:bg-rose-500/20 transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="p-6 flex justify-center bg-slate-955 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 flex justify-center bg-slate-955 max-h-[70vh] overflow-auto">
               {selectedScreenshot && (selectedScreenshot.endsWith('.pdf') || selectedScreenshot.startsWith('data:application/pdf')) ? (
                 <div className="flex flex-col items-center justify-center p-8 space-y-4">
                   <FileText className="w-16 h-16 text-indigo-400" />
@@ -849,11 +1047,14 @@ const AdminDashboard = () => {
                   </a>
                 </div>
               ) : (
-                <img
-                  src={selectedScreenshot && (selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http')) ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
-                  alt="Payment Transaction Receipt"
-                  className="max-h-[50vh] object-contain border border-slate-800 rounded-lg shadow-inner"
-                />
+                <div className="flex items-center justify-center min-h-[50vh]">
+                  <img
+                    src={selectedScreenshot && (selectedScreenshot.startsWith('data:') || selectedScreenshot.startsWith('http')) ? selectedScreenshot : `${API_BASE}/${selectedScreenshot}`}
+                    alt="Payment Transaction Receipt"
+                    style={{ transform: `scale(${zoomLevel})`, transition: 'transform 0.2s ease-out', transformOrigin: 'center center' }}
+                    className="max-h-[60vh] object-contain border border-slate-800 rounded-lg shadow-inner"
+                  />
+                </div>
               )}
             </div>
           </div>

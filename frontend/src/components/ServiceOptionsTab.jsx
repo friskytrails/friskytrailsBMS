@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { API_BASE } from '../config';
 import {
-  Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye
+  Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye, Copy
 } from 'lucide-react';
 
 const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
@@ -49,8 +49,10 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
 
   // Generate Payment ID state
   const [generatePayIdModals, setGeneratePayIdModals] = useState({});
-  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '' });
+  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
   const [generatePayIdLoading, setGeneratePayIdLoading] = useState(false);
+  const [generatedPaymentIds, setGeneratedPaymentIds] = useState({});
+  const [copiedId, setCopiedId] = useState(null);
 
   // Screenshot viewer
   const [viewingScreenshot, setViewingScreenshot] = useState(null);
@@ -291,9 +293,8 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       const data = await res.json();
       if (data.success) {
         onServiceUpdated(data.data);
-        setGeneratePayIdModals({ ...generatePayIdModals, [serviceId]: false });
-        setGeneratePayIdData({ amount: '', details: '' });
-        alert(`Payment ID ${data.paymentId} generated successfully!`);
+        setGeneratedPaymentIds({ ...generatedPaymentIds, [serviceId]: data.paymentId });
+        setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
       } else {
         alert(data.message || 'Error generating payment ID');
       }
@@ -572,6 +573,16 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
                       <span>B2B: ₹{service.b2bCost}</span>
                       <span>Due: ₹{service.totalDue}</span>
                     </div>
+                    {(service.payments || []).filter(p => p.paymentId && p.paymentId.startsWith("GPAY-")).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="text-[10px] uppercase font-bold text-purple-400">Generated IDs:</span>
+                        {(service.payments || []).filter(p => p.paymentId && p.paymentId.startsWith("GPAY-")).map(p => (
+                          <span key={p.paymentId} className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                            {p.paymentId}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -794,23 +805,78 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
                     {/* Generate Payment ID Inline Modal */}
                     {generatePayIdModals[service.serviceId] && (
                       <div className="bg-purple-500/5 border border-purple-500/20 p-4 rounded-xl mb-4 space-y-3">
-                        <h5 className="text-xs font-bold text-purple-400 uppercase">Generate Payment ID (Company → Supplier)</h5>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] text-slate-500 mb-1">Amount (₹) *</label>
-                            <input type="number" value={generatePayIdData.amount} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, amount: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Enter amount" />
+                        <h5 className="text-xs font-bold text-purple-400 uppercase">Generate Payment ID</h5>
+                        
+                        {generatedPaymentIds[service.serviceId] ? (
+                          <div className="bg-slate-900 border border-slate-800 p-4 rounded-lg text-center space-y-3 animate-fadeIn">
+                            <div className="flex items-center justify-center space-x-2">
+                              <CheckCircle className="w-5 h-5 text-emerald-400" />
+                              <span className="text-sm font-bold text-slate-200">Payment ID Generated</span>
+                            </div>
+                            <div className="flex items-center justify-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 max-w-sm mx-auto">
+                              <span className="font-mono text-lg font-bold text-indigo-400 tracking-wider">
+                                {generatedPaymentIds[service.serviceId]}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(generatedPaymentIds[service.serviceId]);
+                                  setCopiedId(generatedPaymentIds[service.serviceId]);
+                                  setTimeout(() => setCopiedId(null), 2000);
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                                title="Copy to Clipboard"
+                              >
+                                {copiedId === generatedPaymentIds[service.serviceId] ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: false });
+                                setGeneratedPaymentIds(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[service.serviceId];
+                                  return newState;
+                                });
+                              }}
+                              className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors"
+                            >
+                              Done
+                            </button>
                           </div>
-                          <div>
-                            <label className="block text-[10px] text-slate-500 mb-1">Details/Remarks</label>
-                            <input type="text" value={generatePayIdData.details} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, details: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Optional remarks" />
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => handleGeneratePaymentId(service.serviceId)} disabled={generatePayIdLoading} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">
-                            {generatePayIdLoading ? 'Generating...' : 'Generate ID'}
-                          </button>
-                          <button onClick={() => setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: false })} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold">Cancel</button>
-                        </div>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">From</label>
+                                <select value={generatePayIdData.paymentFrom} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentFrom: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
+                                  <option value="Company">Company</option>
+                                  <option value="Supplier">Supplier</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">To</label>
+                                <select value={generatePayIdData.paymentTo} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentTo: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
+                                  <option value="Supplier">Supplier</option>
+                                  <option value="Company">Company</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">Amount (₹) *</label>
+                                <input type="number" value={generatePayIdData.amount} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, amount: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Enter amount" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">Details/Remarks</label>
+                                <input type="text" value={generatePayIdData.details} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, details: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Optional remarks" />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => handleGeneratePaymentId(service.serviceId)} disabled={generatePayIdLoading} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">
+                                {generatePayIdLoading ? 'Generating...' : 'Generate ID'}
+                              </button>
+                              <button onClick={() => setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: false })} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs font-bold">Cancel</button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -910,10 +976,16 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
     details: ''
   });
   const [file, setFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(data, file);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(data, file);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -969,7 +1041,13 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
             <label className="text-xs text-slate-400 mb-1 block">Details/Remarks</label>
             <input type="text" value={data.details} onChange={e => setData({...data, details: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100"/>
           </div>
-          <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold mt-2">Submit Payment</button>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold mt-2 disabled:opacity-50 transition-colors"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Payment'}
+          </button>
         </form>
       </div>
     </div>
