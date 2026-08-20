@@ -114,7 +114,7 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col h-full min-h-[400px]">
       <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
         <MessageSquare className="w-5 h-5 text-[#00A89E]" />
-        <span>Discussion & Log</span>
+        <span>Discussion</span>
       </h2>
 
       {/* Error message */}
@@ -127,33 +127,13 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
 
       {/* Comments List */}
       <div className="flex-grow overflow-y-auto pr-1 mb-4 space-y-4 max-h-[350px] scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-        {booking?.comments && booking.comments.length > 0 ? (
-          booking.comments.map((comment) => {
-            const isSystem = comment.senderName && comment.senderName.startsWith('System');
-            const isAdmin = !isSystem && comment.sender?.role === 'admin';
-            
-            if (isSystem) {
+        {(() => {
+          const discussionComments = booking?.comments ? booking.comments.filter(c => !(c.senderName && c.senderName.startsWith('System'))) : [];
+          if (discussionComments.length > 0) {
+            return discussionComments.map((comment) => {
+              const isAdmin = comment.sender?.role === 'admin';
+              
               return (
-                <div
-                  key={comment._id}
-                  className="flex flex-col items-center justify-center my-3 px-2"
-                >
-                  <div className="bg-slate-950/40 border border-indigo-500/20 border-dashed rounded-xl px-4 py-2.5 w-full text-center shadow-inner">
-                    <p className="text-[11px] font-bold text-indigo-400 tracking-wide uppercase mb-0.5">
-                      {comment.senderName}
-                    </p>
-                    <p className="text-xs text-slate-300 italic font-medium whitespace-pre-wrap">
-                      {comment.message}
-                    </p>
-                    <span className="text-[9px] text-slate-500 block mt-1 font-mono">
-                      {new Date(comment.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                    </span>
-                  </div>
-                </div>
-              );
-            }
-            
-            return (
               <div
                 key={comment._id}
                 className="flex flex-col space-y-1"
@@ -213,13 +193,16 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                 </div>
               </div>
             );
-          })
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-slate-500 py-10">
-            <MessageSquare className="w-8 h-8 opacity-30 mb-2" />
-            <p className="text-xs">No comments or activity logs yet.</p>
-          </div>
-        )}
+            });
+          } else {
+            return (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 py-10">
+                <MessageSquare className="w-8 h-8 opacity-30 mb-2" />
+                <p className="text-xs">No discussion messages yet.</p>
+              </div>
+            );
+          }
+        })()}
         <div ref={commentsEndRef} />
       </div>
 

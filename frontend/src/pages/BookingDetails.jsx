@@ -23,6 +23,7 @@ import {
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
 import ServiceOptionsTab from '../components/ServiceOptionsTab';
+import ActivityLogSection from '../components/ActivityLogSection';
 
 const getStatusStyles = (status) => {
   switch (status) {
@@ -909,7 +910,8 @@ const BookingDetails = () => {
     { id: 'overview', name: 'BOOKING SNAPSHOT' },
     { id: 'payments', name: 'BILLING & PAYMENTS' },
     { id: 'services', name: 'SERVICE OPTIONS' },
-    { id: 'comments', name: 'FOLLOW-UP HISTORY' }
+    { id: 'discussion', name: 'DISCUSSION' },
+    { id: 'logs', name: 'ACTIVITY LOGS' }
   ];
 
   return (
@@ -1767,14 +1769,21 @@ const BookingDetails = () => {
             </div>
           )}
 
-          {/* TAB 4: COMMENTS & UPDATES */}
-          {activeTab === 'comments' && (
+          {/* TAB 4: DISCUSSION */}
+          {activeTab === 'discussion' && (
             <div className="h-full min-h-[480px]">
               <CommentSection
                 booking={booking}
                 token={token}
                 onCommentAdded={(updatedBooking) => setBooking(updatedBooking)}
               />
+            </div>
+          )}
+
+          {/* TAB 5: ACTIVITY LOGS */}
+          {activeTab === 'logs' && (
+            <div className="h-full min-h-[480px]">
+              <ActivityLogSection logs={getActivityLog()} />
             </div>
           )}
 
