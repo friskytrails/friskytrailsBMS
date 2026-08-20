@@ -750,6 +750,20 @@ const BookingDetails = () => {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
   const calculateDaysRemaining = (startDate) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1885,8 +1899,12 @@ const BookingDetails = () => {
                   {/* ── SECTION: CRM Notes ── */}
                   {(() => {
                     const allItems = leadData.notes || leadData.interactionHistory || [];
-                    const noteItems = allItems.filter(item => !item.imageUrl && !item.attachmentUrl && !item.pdfUrl);
-                    const attachmentItems = allItems.filter(item => item.imageUrl || item.attachmentUrl || item.pdfUrl);
+                    const noteItems = allItems
+                      .filter(item => !item.imageUrl && !item.attachmentUrl && !item.pdfUrl)
+                      .sort((a, b) => new Date(a.timestamp || a.date || 0) - new Date(b.timestamp || b.date || 0));
+                    const attachmentItems = allItems
+                      .filter(item => item.imageUrl || item.attachmentUrl || item.pdfUrl)
+                      .sort((a, b) => new Date(a.timestamp || a.date || 0) - new Date(b.timestamp || b.date || 0));
 
                     return (
                       <>
@@ -1911,7 +1929,7 @@ const BookingDetails = () => {
                                       {item.author || item.type || 'Agent'}
                                     </span>
                                     <span className="text-slate-500 text-[11px] font-mono">
-                                      {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                                      {formatDateTime(item.timestamp || item.date)}
                                     </span>
                                   </div>
                                   <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
@@ -1938,22 +1956,24 @@ const BookingDetails = () => {
                               </span>
                             </div>
                             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                              {leadData.interactionHistory.map((item, idx) => (
-                                <div key={`hist-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="font-bold text-cyan-400 flex items-center gap-1.5">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                                      {item.type || 'Interaction'}
-                                    </span>
-                                    <span className="text-slate-500 text-[11px] font-mono">
-                                      {item.date ? formatDate(item.date) : ''}
-                                    </span>
+                              {[...leadData.interactionHistory]
+                                .sort((a, b) => new Date(a.date || a.timestamp || 0) - new Date(b.date || b.timestamp || 0))
+                                .map((item, idx) => (
+                                  <div key={`hist-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
+                                    <div className="flex justify-between items-center text-xs">
+                                      <span className="font-bold text-cyan-400 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                        {item.type || 'Interaction'}
+                                      </span>
+                                      <span className="text-slate-500 text-[11px] font-mono">
+                                        {formatDateTime(item.date || item.timestamp)}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
+                                      {item.notes || item.text || item.message || '—'}
+                                    </p>
                                   </div>
-                                  <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
-                                    {item.notes || item.text || item.message || '—'}
-                                  </p>
-                                </div>
-                              ))}
+                                ))}
                             </div>
                           </div>
                         )}
@@ -1984,8 +2004,8 @@ const BookingDetails = () => {
                                         <p className="text-xs text-slate-300 font-semibold truncate">
                                           {item.text || item.notes || item.message || (isPdf ? 'PDF Document' : 'Attachment')}
                                         </p>
-                                        <span className="text-[10px] text-slate-500 font-mono">
-                                          {item.author || item.type || ''} {item.timestamp || (item.date ? formatDate(item.date) : '')}
+                                        <span className="text-[10px] text-slate-550 font-mono">
+                                          {item.author || item.type || ''} {formatDateTime(item.timestamp || item.date)}
                                         </span>
                                       </div>
                                     </div>
