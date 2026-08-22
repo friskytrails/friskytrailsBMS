@@ -2,6 +2,38 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, MessageSquare, AlertCircle, Paperclip, FileText, X } from 'lucide-react';
 import { API_BASE } from '../config';
 
+const formatCommentText = (text) => {
+  if (!text) return null;
+  
+  // Split by "///" first
+  const sections = text.split(/\s*\/\/\/\s*/);
+  
+  return sections.map((section, sIdx) => {
+    const trimmedSection = section.trim();
+    if (!trimmedSection) return null;
+    
+    // Check if the section contains pricing parentheses like (3700) or (3200*2)
+    const hasPricingParentheses = /\(\s*\d+/.test(trimmedSection);
+    
+    if (hasPricingParentheses) {
+      const items = trimmedSection.split(/,\s*/);
+      return (
+        <div key={sIdx} className="mb-2 last:mb-0">
+          {items.map((item, iIdx) => (
+            <div key={iIdx} className="py-0.5 whitespace-pre-wrap">{item.trim()}</div>
+          ))}
+        </div>
+      );
+    }
+    
+    return (
+      <div key={sIdx} className="mb-2 last:mb-0 whitespace-pre-wrap">
+        {trimmedSection}
+      </div>
+    );
+  });
+};
+
 const CommentSection = ({ booking, token, onCommentAdded }) => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -158,7 +190,11 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                       : 'bg-[#1A1A1A] text-white border-[#333] rounded-tr-none'
                   }`}
                 >
-                  {comment.message && <p className="whitespace-pre-wrap">{comment.message}</p>}
+                  {comment.message && (
+                    <div className="whitespace-pre-wrap">
+                      {formatCommentText(comment.message)}
+                    </div>
+                  )}
                   
                   {comment.fileUrl && (() => {
                     const fullUrl = comment.fileUrl.startsWith('data:') || comment.fileUrl.startsWith('http')
@@ -250,13 +286,22 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
           </button>
 
           <div className="relative flex-grow flex items-center">
-            <input
-              type="text"
+            <textarea
               placeholder="Type a message..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               disabled={isSubmitting}
-              className="w-full pl-4 pr-12 py-2.5 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors"
+              rows={1}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (message.trim() || file) {
+                    handleSubmit(e);
+                  }
+                }
+              }}
+              className="w-full pl-4 pr-12 py-2.5 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors resize-none overflow-y-auto"
+              style={{ minHeight: '42px', maxHeight: '120px' }}
             />
             <button
               type="submit"

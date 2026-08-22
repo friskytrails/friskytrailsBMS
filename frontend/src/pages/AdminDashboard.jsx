@@ -596,8 +596,10 @@ const AdminDashboard = () => {
                     <tbody className="divide-y divide-slate-800/60 bg-slate-950/20">
                       {pendingBookings.map((booking) => (
                         <tr key={booking._id} className="hover:bg-slate-900/25 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap font-bold text-indigo-600 font-mono">
-                            {booking.bookingId}
+                          <td className="px-6 py-4 whitespace-nowrap font-bold text-indigo-650 font-mono">
+                            <Link to={`/booking/${booking.bookingId}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-indigo-600">
+                              {booking.bookingId}
+                            </Link>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex flex-col space-y-0.5">
@@ -736,7 +738,7 @@ const AdminDashboard = () => {
                         return (
                           <tr key={p.paymentId || p._id} className="hover:bg-slate-900/25 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap font-bold text-indigo-400 font-mono">
-                              <Link to={`/booking/${p.bookingId}`} className="hover:underline text-indigo-400">
+                              <Link to={`/booking/${p.bookingId}`} target="_blank" rel="noopener noreferrer" className="hover:underline text-indigo-400">
                                 {p.bookingId}
                               </Link>
                             </td>
@@ -910,6 +912,8 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <Link 
                                 to={`/booking/${p.bookingId}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
                                 className="text-indigo-400 hover:text-indigo-350 font-semibold underline"
                               >
                                 {p.bookingId}
@@ -950,6 +954,8 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <Link 
                                 to={`/booking/${p.bookingId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center space-x-1 py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 text-xs font-semibold transition-all cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />

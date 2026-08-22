@@ -547,7 +547,7 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
     }
 
     const bookingStatuses = ['Pending', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
-    const tripStatuses = ['Pending', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
+    const tripStatuses = ['Pending', 'Under Process', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
 
     if (status && !bookingStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid booking status value' });

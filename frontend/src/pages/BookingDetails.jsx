@@ -18,7 +18,8 @@ import {
   X,
   Edit,
   Check,
-  Lock
+  Lock,
+  MessageSquare
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
@@ -47,6 +48,7 @@ const getStatusStyles = (status) => {
       return 'bg-slate-500/10 text-slate-400 border-slate-500/25';
     case 'Partial Payment':
       return 'bg-orange-500/10 text-orange-500 border-orange-500/25';
+    case 'Under Process':
     case 'Pending':
     default:
       return 'bg-amber-500/10 text-amber-500 border-amber-500/25';
@@ -118,6 +120,11 @@ const BookingDetails = () => {
   // Profit Margin State
   const [profitMarginInput, setProfitMarginInput] = useState(0);
   const [togglingTaskId, setTogglingTaskId] = useState(null);
+
+  // --- Status Comment Modal States ---
+  const [isStatusCommentModalOpen, setIsStatusCommentModalOpen] = useState(false);
+  const [pendingTripStatus, setPendingTripStatus] = useState('');
+  const [statusCommentText, setStatusCommentText] = useState('');
 
   // --- Full Booking Edit States ---
   const [isFullEditModalOpen, setIsFullEditModalOpen] = useState(false);
@@ -337,18 +344,16 @@ const BookingDetails = () => {
     const newTripStatus = e.target.value;
     if (!newTripStatus || newTripStatus === booking.tripStatus) return;
 
-    // Prompt for comment if this status requires one
-    let statusComment = '';
     if (commentRequiredTripStatuses.includes(newTripStatus)) {
-      const userComment = window.prompt(`Add a comment for status "${newTripStatus}" (required):`);
-      if (userComment === null) return; // User cancelled
-      statusComment = userComment.trim();
-      if (!statusComment) {
-        alert('A comment is required for this status change.');
-        return;
-      }
+      setPendingTripStatus(newTripStatus);
+      setStatusCommentText('');
+      setIsStatusCommentModalOpen(true);
+    } else {
+      await submitTripStatusUpdate(newTripStatus, '');
     }
+  };
 
+  const submitTripStatusUpdate = async (newTripStatus, statusComment) => {
     setUpdatingTripStatus(true);
     try {
       const bodyPayload = { tripStatus: newTripStatus };
@@ -365,6 +370,8 @@ const BookingDetails = () => {
       const data = await res.json();
       if (data.success) {
         setBooking(data.data);
+        setIsStatusCommentModalOpen(false);
+        setPendingTripStatus('');
       } else {
         alert(data.message || 'Failed to update trip status');
       }
@@ -977,6 +984,7 @@ const BookingDetails = () => {
                         }`}
                     >
                       <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
+                      <option value="Under Process" className="bg-slate-900 text-amber-500">Under Process</option>
                       <option value="Fulfillment Done" className="bg-slate-900 text-[#00A89E]">Fulfillment Done</option>
                       <option value="Trip Completed" className="bg-slate-900 text-emerald-500">Trip Completed</option>
                       <option value="Postponed" className="bg-slate-900 text-purple-400">Postponed</option>
@@ -2449,6 +2457,82 @@ const BookingDetails = () => {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* --- Trip Status Comment Modal --- */}
+      {isStatusCommentModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-slate-800">
+              <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 font-sans">
+                <MessageSquare className="w-5 h-5 text-indigo-500" />
+                <span>Status Change Comment</span>
+              </h2>
+              <button
+                onClick={() => {
+                  setIsStatusCommentModalOpen(false);
+                  setPendingTripStatus('');
+                }}
+                className="text-slate-400 hover:text-slate-205 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!statusCommentText.trim()) {
+                  alert('A comment is required for this status change.');
+                  return;
+                }
+                await submitTripStatusUpdate(pendingTripStatus, statusCommentText.trim());
+              }}
+            >
+              <div className="p-6 space-y-4 font-sans">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  You are changing the trip status to <span className="font-bold text-slate-200">"{pendingTripStatus}"</span>.
+                  A comment is required to record the reason for this change.
+                </p>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                    Comment *
+                  </label>
+                  <textarea
+                    required
+                    placeholder="Enter status change reason..."
+                    value={statusCommentText}
+                    onChange={(e) => setStatusCommentText(e.target.value)}
+                    rows={4}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3 py-2 text-slate-100 text-sm focus:outline-none transition-colors resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-6 border-t border-slate-800 flex justify-end gap-3 font-sans">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsStatusCommentModalOpen(false);
+                    setPendingTripStatus('');
+                  }}
+                  className="px-4 py-2 border border-slate-800 text-slate-400 hover:text-slate-205 rounded text-xs font-bold uppercase transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingTripStatus}
+                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold uppercase rounded shadow transition-colors text-xs cursor-pointer disabled:opacity-50"
+                >
+                  {updatingTripStatus ? 'Updating...' : 'Update Status'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

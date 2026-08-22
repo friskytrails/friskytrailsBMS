@@ -445,11 +445,11 @@ const SearchDashboard = () => {
                   <th className="px-2.5 py-3">Booking ID</th>
                   <th className="px-2.5 py-3">Booking Date</th>
                   <th className="px-2.5 py-3">Client Name</th>
+                  <th className="px-2.5 py-3">Package Name</th>
                   <th className="px-2.5 py-3 text-center">Total</th>
                   <th className="px-2.5 py-3 text-center">Paid</th>
                   <th className="px-2.5 py-3 text-center">Due</th>
-                  <th className="px-2.5 py-3">Start Date</th>
-                  <th className="px-2.5 py-3">End Date</th>
+                  <th className="px-2.5 py-3">Trip Dates</th>
                   <th className="px-2.5 py-3">Booking Status</th>
                   <th className="px-2.5 py-3">Trip Status</th>
                 </tr>
@@ -458,7 +458,7 @@ const SearchDashboard = () => {
                 {bookings.map((booking) => (
                   <tr key={booking._id} className="hover:bg-slate-900/25 transition-colors">
                     <td className="px-2.5 py-3 whitespace-nowrap">
-                      <Link to={`/booking/${booking.bookingId}`} className="font-bold text-indigo-600 font-mono hover:text-indigo-500 hover:underline">
+                      <Link to={`/booking/${booking.bookingId}`} target="_blank" rel="noopener noreferrer" className="font-bold text-indigo-600 font-mono hover:text-indigo-500 hover:underline">
                         {booking.bookingId}
                       </Link>
                     </td>
@@ -471,6 +471,9 @@ const SearchDashboard = () => {
                     <td className="px-2.5 py-3 whitespace-nowrap font-semibold text-slate-100">
                       {booking.travellerName}
                     </td>
+                    <td className="px-2.5 py-3 text-slate-350 max-w-[180px] truncate" title={booking.packageName}>
+                      {booking.packageName}
+                    </td>
                     <td className="px-2.5 py-3 whitespace-nowrap text-center">
                       <span className="inline-flex items-center justify-center font-mono font-bold text-orange-400 bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg shadow-sm">
                         ₹{booking.totalAmount}
@@ -482,53 +485,49 @@ const SearchDashboard = () => {
                       </span>
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap text-center">
-                      <span className={`inline-flex items-center justify-center font-mono font-bold px-3 py-1.5 rounded-lg border shadow-sm ${
-                        booking.dueAmount > 0 
-                          ? 'text-rose-500 bg-rose-500/10 border-rose-500/20' 
+                      <span className={`inline-flex items-center justify-center font-mono font-bold px-3 py-1.5 rounded-lg border shadow-sm ${booking.dueAmount > 0
+                          ? 'text-rose-500 bg-rose-500/10 border-rose-500/20'
                           : 'text-slate-400 bg-slate-800/40 border border-slate-700/30'
-                      }`}>
+                        }`}>
                         ₹{booking.dueAmount}
                       </span>
                     </td>
-                    <td className="px-2.5 py-3 whitespace-nowrap text-xs text-indigo-400 font-mono">
-                      {formatDate(booking.startDate)}
-                    </td>
-                    <td className="px-2.5 py-3 whitespace-nowrap text-xs text-indigo-400 font-mono">
-                      {formatDate(booking.endDate)}
+                    <td className="px-2.5 py-3 whitespace-nowrap text-xs font-mono">
+                      <div className="text-indigo-400">{formatDate(booking.startDate)}</div>
+                      <div className="text-orange-400 mt-0.5">{formatDate(booking.endDate)}</div>
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap">
-                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
-                        booking.status === 'Confirmed'
+                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${booking.status === 'Confirmed'
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                           : booking.status === 'Cancelled'
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          : booking.status === 'On Hold'
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                          : booking.status === 'Partial Payment'
-                          ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
-                          : booking.status === 'Payment Done'
-                          ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      }`}>
+                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                            : booking.status === 'On Hold'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                              : booking.status === 'Partial Payment'
+                                ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
+                                : booking.status === 'Payment Done'
+                                  ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}>
                         {booking.status || 'Pending'}
                       </span>
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap">
                       <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
-                        booking.tripStatus === 'Cancelled'
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          : booking.tripStatus === 'Fulfillment Done'
-                          ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
-                          : booking.tripStatus === 'Trip Completed'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : booking.tripStatus === 'No Refund'
-                          ? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                          : booking.tripStatus === 'Refund Required'
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                          : booking.tripStatus === 'Refund Done'
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      }`}>
+                          booking.tripStatus === 'Fulfillment Done'
+                            ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
+                            : booking.tripStatus === 'Trip Completed'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : booking.tripStatus === 'Postponed'
+                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                : ['Cash Refund', 'Wallet Refund', 'Cancelled'].includes(booking.tripStatus)
+                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                  : ['Cash Refund Done', 'Wallet Refund Done'].includes(booking.tripStatus)
+                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                    : booking.tripStatus === 'No Refund'
+                                      ? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}>
                         {booking.tripStatus || 'Pending'}
                       </span>
                     </td>
