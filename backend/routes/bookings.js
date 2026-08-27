@@ -132,11 +132,11 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
   try {
     let query = {};
 
-    // Employees can see bookings they created. Assigned employees can only see them if NOT Pending.
+    // Employees can see bookings they created, and all bookings that are not Pending.
     if (req.user.role === 'employee') {
       query.$or = [
         { createdBy: req.user._id },
-        { assignedTo: req.user._id, status: { $ne: 'Pending' } }
+        { status: { $ne: 'Pending' } }
       ];
     }
 
@@ -229,10 +229,10 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
 
     // Visibility Logic
     if (req.user.role === 'employee') {
-      // Employees can see bookings they created. Assigned employees can only see them if NOT Pending.
+      // Employees can see bookings they created, and all bookings that are not Pending.
       query.$or = [
         { createdBy: req.user._id },
-        { assignedTo: req.user._id, status: { $ne: 'Pending' } }
+        { status: { $ne: 'Pending' } }
       ];
     } else if (req.user.role === 'admin' && status) {
       query.status = status;
@@ -269,6 +269,7 @@ router.get('/pending-payments', protect, adminOnly, async (req, res) => {
     })
       .select('bookingId travellerName travellerEmail travellerPhone packageName location payments services')
       .populate('createdBy', 'name email')
+      .populate('services.supplier')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -328,7 +329,10 @@ router.get('/pending-payments', protect, adminOnly, async (req, res) => {
                   attachmentName: payment.screenshotName,
                   details: payment.details,
                   isServicePayment: true,
-                  serviceId: service.serviceId
+                  serviceId: service.serviceId,
+                  startDate: service.startDate,
+                  endDate: service.endDate,
+                  supplier: service.supplier
                 });
               }
             });
@@ -379,10 +383,14 @@ router.get('/pending', protect, adminOnly, async (req, res) => {
 router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
   try {
     const bookings = await Booking.find({
-      'services.payments.paymentId': { $regex: /^GPAY-/ }
+      $or: [
+        { 'services.payments.paymentId': { $regex: /^GPAY-/ } },
+        { 'services.payments.isGenerated': true }
+      ]
     })
       .select('bookingId travellerName travellerEmail travellerPhone packageName location services')
       .populate('createdBy', 'name email')
+      .populate('services.supplier')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -392,7 +400,7 @@ router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
         booking.services.forEach(service => {
           if (service.payments && service.payments.length > 0) {
             service.payments.forEach(payment => {
-              if (payment.paymentId && payment.paymentId.startsWith('GPAY-')) {
+              if (payment.isGenerated || (payment.paymentId && payment.paymentId.startsWith('GPAY-'))) {
                 generatedIds.push({
                   bookingObjectId: booking._id,
                   bookingId: booking.bookingId,
@@ -409,7 +417,10 @@ router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
                   paidAmount: payment.paidAmount,
                   status: payment.status,
                   addedBy: payment.addedBy,
-                  details: payment.details
+                  details: payment.details,
+                  startDate: service.startDate,
+                  endDate: service.endDate,
+                  supplier: service.supplier
                 });
               }
             });
@@ -527,12 +538,13 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check: Admin, Creator, or Assigned Employee
+    // Permission check: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update this booking status.' });
     }
 
@@ -600,17 +612,18 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
 // @access  Private & Verified
 router.get('/id/:id/screenshot', protect, verifiedOnly, async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id).select('screenshot');
+    const booking = await Booking.findById(req.params.id).select('screenshot status createdBy assignedTo');
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check: Admin, Creator, or Assigned Employee
+    // Permission check: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -632,31 +645,21 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
     const booking = await Booking.findOne({ bookingId: req.params.bookingId })
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
     // Employee access control:
-    // - Pending bookings: NO employee can view (not even creator — must wait for payment approval)
-    // - Confirmed/other statuses: only creator or assigned employees can view
+    // - Pending bookings: NO employee can view (must wait for payment approval)
+    // - Confirmed/other statuses: shown to all employees (even if not assigned)
     if (req.user.role === 'employee') {
-      const isCreator = booking.createdBy && booking.createdBy._id.toString() === req.user._id.toString();
-      const isAssigned = booking.assignedTo && booking.assignedTo.some(userObj => {
-        const id = userObj._id || userObj;
-        return id.toString() === req.user._id.toString();
-      });
-      
       const isPending = booking.status === 'Pending';
 
       // Pending bookings are not viewable by any employee (creator must wait for admin confirmation)
       if (isPending) {
-        return res.status(403).json({ success: false, message: 'Get the Payment Approved & Booking Assigned to you to view the booking.' });
-      }
-
-      // Non-pending bookings: only creator or assigned employees can view
-      if (!isCreator && !isAssigned) {
         return res.status(403).json({ success: false, message: 'Get the Payment Approved & Booking Assigned to you to view the booking.' });
       }
     }
@@ -681,12 +684,13 @@ router.patch('/:id/comment', protect, verifiedOnly, upload.single('file'), async
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check for access: Admin, Creator, or Assigned Employee
+    // Permission check for access: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied: You do not have access to this booking.' });
     }
 
@@ -743,12 +747,13 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check: Admin, Creator, or Assigned Employee
+    // Permission check: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to edit this booking.' });
     }
 
@@ -851,7 +856,8 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.json({
       success: true,
@@ -874,12 +880,13 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check: Admin, Creator, or Assigned Employee
+    // Permission check: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update payment for this booking.' });
     }
 
@@ -1089,8 +1096,9 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
       const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
       const isAdmin = req.user.role === 'admin';
+      const isEmployee = req.user.role === 'employee';
 
-      if (!isAdmin && !isCreator && !isAssigned) {
+      if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
         return res.status(403).json({ success: false, message: 'Access denied' });
       }
 
@@ -1205,14 +1213,15 @@ router.patch('/:id/toggle-task', protect, verifiedOnly, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permissions: Only Admin, Creator, or Assigned Employee can toggle
+    // Permissions: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isAdmin = req.user.role === 'admin';
-    const isCreator = booking.createdBy.toString() === req.user._id.toString();
-    const isAssigned = booking.assignedTo.some(
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo && booking.assignedTo.some(
       (empId) => empId.toString() === req.user._id.toString()
     );
+    const isEmployee = req.user.role === 'employee';
 
-    if (!isAdmin && !isCreator && !isAssigned) {
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to toggle tasks on this booking',
@@ -1283,11 +1292,12 @@ router.post('/:id/services', protect, verifiedOnly, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    // Permission check
+    // Permission check: Admin, Creator, Assigned Employee, or any Employee if not Pending
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
-    if (!isAdmin && !isCreator && !isAssigned) {
+    const isEmployee = req.user.role === 'employee';
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -1373,7 +1383,8 @@ router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) =
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
-    if (!isAdmin && !isCreator && !isAssigned) {
+    const isEmployee = req.user.role === 'employee';
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -1439,7 +1450,8 @@ router.patch('/:id/services/:serviceId/status', protect, verifiedOnly, async (re
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
-    if (!isAdmin && !isCreator && !isAssigned) {
+    const isEmployee = req.user.role === 'employee';
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -1465,7 +1477,8 @@ router.patch('/:id/services/:serviceId/status', protect, verifiedOnly, async (re
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.json({ success: true, data: updatedBooking });
   } catch (error) {
@@ -1485,7 +1498,8 @@ router.post('/:id/services/:serviceId/payment', protect, verifiedOnly, upload.si
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
-    if (!isAdmin && !isCreator && !isAssigned) {
+    const isEmployee = req.user.role === 'employee';
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -1503,7 +1517,7 @@ router.post('/:id/services/:serviceId/payment', protect, verifiedOnly, upload.si
       return res.status(400).json({ success: false, message: 'Screenshot is mandatory for Account payment mode' });
     }
 
-    const spayId = `SPAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const spayId = `${100000 + Math.floor(Math.random() * 900000)}`;
 
     const newPayment = {
       paymentId: spayId,
@@ -1535,7 +1549,8 @@ router.post('/:id/services/:serviceId/payment', protect, verifiedOnly, upload.si
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.status(201).json({ success: true, message: `Payment ${spayId} added to service`, data: updatedBooking });
   } catch (error) {
@@ -1547,7 +1562,7 @@ router.post('/:id/services/:serviceId/payment', protect, verifiedOnly, upload.si
 // @desc    Verify / reject a service payment (Admin only)
 // @route   PATCH /api/bookings/:id/services/:serviceId/payment/:paymentId/verify
 // @access  Private & Admin
-router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, verifiedOnly, async (req, res) => {
+router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, verifiedOnly, upload.single('screenshot'), async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Only admins can verify service payments' });
@@ -1565,6 +1580,13 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     const { status, reason } = req.body;
 
     if (status === 'VERIFIED') {
+      if (!payment.screenshot && !req.file) {
+        return res.status(400).json({ success: false, message: 'Screenshot is mandatory for verifying this payment' });
+      }
+      if (req.file) {
+        payment.screenshot = req.file.path;
+        payment.screenshotName = req.file.originalname;
+      }
       payment.status = 'VERIFIED';
       payment.verified = true;
       booking.comments.push({
@@ -1587,7 +1609,8 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.json({ success: true, data: updatedBooking });
   } catch (error) {
@@ -1607,7 +1630,8 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
     const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
     const isAssigned = booking.assignedTo && booking.assignedTo.some(id => id.toString() === req.user._id.toString());
     const isAdmin = req.user.role === 'admin';
-    if (!isAdmin && !isCreator && !isAssigned) {
+    const isEmployee = req.user.role === 'employee';
+    if (!isAdmin && !isCreator && !isAssigned && !(isEmployee && booking.status !== 'Pending')) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -1619,7 +1643,7 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
       return res.status(400).json({ success: false, message: 'Amount is required' });
     }
 
-    const gpayId = `GPAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const gpayId = `${100000 + Math.floor(Math.random() * 900000)}`;
     const pFrom = paymentFrom || 'Company';
     const pTo = paymentTo || 'Supplier';
 
@@ -1637,6 +1661,7 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
       addedBy: req.user.name,
       details: details || `Payment request generated by ${req.user.name}`,
       verified: false,
+      isGenerated: true,
     };
 
     service.payments.push(paymentEntry);
@@ -1652,7 +1677,8 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.status(201).json({ success: true, message: `Payment ID ${gpayId} generated`, paymentId: gpayId, data: updatedBooking });
   } catch (error) {

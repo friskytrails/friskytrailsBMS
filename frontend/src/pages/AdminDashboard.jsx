@@ -56,6 +56,17 @@ const AdminDashboard = () => {
   const [generatedIdsError, setGeneratedIdsError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
+  // State for screenshot upload modal during payment verification
+  const [screenshotModal, setScreenshotModal] = useState({
+    isOpen: false,
+    bookingObjectId: null,
+    paymentId: null,
+    isServicePayment: false,
+    serviceId: null,
+    file: null,
+    loading: false
+  });
+
   const handleViewScreenshot = async (bookingId, bookingObjectId) => {
     setFetchingScreenshotId(bookingObjectId);
     try {
@@ -261,6 +272,21 @@ const AdminDashboard = () => {
 
   // Verify payment action
   const handleVerifyPayment = async (bookingObjectId, paymentId, isServicePayment, serviceId) => {
+    // Check if a screenshot is required but missing
+    const paymentObj = pendingPayments.find(p => p.paymentId === paymentId || p._id === paymentId);
+    if (isServicePayment && paymentObj && !paymentObj.attachment) {
+      setScreenshotModal({
+        isOpen: true,
+        bookingObjectId,
+        paymentId,
+        isServicePayment,
+        serviceId,
+        file: null,
+        loading: false
+      });
+      return;
+    }
+
     try {
       const url = isServicePayment
         ? `${API_BASE}/api/bookings/${bookingObjectId}/services/${serviceId}/payment/${paymentId}/verify`
@@ -291,6 +317,47 @@ const AdminDashboard = () => {
     } catch (err) {
       console.error('Error verifying payment:', err);
       alert('Server connection failed');
+    }
+  };
+
+  const handleUploadAndVerify = async () => {
+    if (!screenshotModal.file) {
+      alert('Please select a screenshot file first.');
+      return;
+    }
+    
+    setScreenshotModal(prev => ({ ...prev, loading: true }));
+    
+    try {
+      const formData = new FormData();
+      formData.append('status', 'VERIFIED');
+      formData.append('screenshot', screenshotModal.file);
+      
+      const url = `${API_BASE}/api/bookings/${screenshotModal.bookingObjectId}/services/${screenshotModal.serviceId}/payment/${screenshotModal.paymentId}/verify`;
+      
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setPendingPayments(prev => prev.filter(p => p.paymentId !== screenshotModal.paymentId && p._id !== screenshotModal.paymentId));
+        setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, loading: false });
+        setSuccessModal({ isOpen: true, message: 'Payment uploaded and verified successfully!' });
+        fetchPendingPayments();
+        fetchGeneratedIds();
+      } else {
+        alert(data.message || 'Failed to verify payment');
+      }
+    } catch (err) {
+      console.error('Error uploading/verifying payment:', err);
+      alert('Server connection failed');
+    } finally {
+      setScreenshotModal(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -337,6 +404,47 @@ const AdminDashboard = () => {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const handleCopyDetails = (p) => {
+    const paymentIdVal = p.paymentId;
+    if (!paymentIdVal) return;
+
+    const supplierNameVal = p.supplierName || 'Unknown Supplier';
+    
+    const serviceDateVal = (p.startDate && p.endDate)
+      ? `${new Date(p.startDate).toLocaleDateString('en-IN')} to ${new Date(p.endDate).toLocaleDateString('en-IN')}`
+      : p.startDate
+        ? new Date(p.startDate).toLocaleDateString('en-IN')
+        : 'N/A';
+
+    const supplier = p.supplier;
+    let accountDetailsVal = 'N/A';
+    if (supplier && typeof supplier === 'object') {
+      const accParts = [];
+      if (supplier.accountHolderName) accParts.push(`Holder: ${supplier.accountHolderName}`);
+      if (supplier.bankName) accParts.push(`Bank: ${supplier.bankName}`);
+      if (supplier.accountNumber) accParts.push(`A/C: ${supplier.accountNumber}`);
+      if (supplier.ifscCode) accParts.push(`IFSC: ${supplier.ifscCode}`);
+      if (supplier.upiId) accParts.push(`UPI ID: ${supplier.upiId}`);
+      if (supplier.upiNumber) accParts.push(`UPI No: ${supplier.upiNumber}`);
+      if (accParts.length > 0) accountDetailsVal = accParts.join('\n');
+    }
+
+    const amountToPayVal = p.paidAmount ? `₹${p.paidAmount.toLocaleString('en-IN')}` : 'N/A';
+    const remarkVal = p.details || 'N/A';
+
+    const copyText = `Payment ID: ${paymentIdVal}
+Supplier Name: ${supplierNameVal}
+Service Date: ${serviceDateVal}
+Account Details:
+${accountDetailsVal}
+Amount to Pay: ${amountToPayVal}
+Remark: ${remarkVal}`;
+
+    navigator.clipboard.writeText(copyText);
+    setCopiedId(paymentIdVal);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   if (usersLoading && bookingsLoading && paymentsLoading) {
@@ -897,11 +1005,7 @@ const AdminDashboard = () => {
                                   {p.paymentId}
                                 </span>
                                 <button
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(p.paymentId);
-                                    setCopiedId(p.paymentId);
-                                    setTimeout(() => setCopiedId(null), 2000);
-                                  }}
+                                  onClick={() => handleCopyDetails(p)}
                                   className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
                                   title="Copy to Clipboard"
                                 >
@@ -1087,6 +1191,40 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {/* Verification Screenshot Upload Modal */}
+      {screenshotModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl overflow-hidden shadow-2xl p-6 animate-scaleUp">
+            <h3 className="text-lg font-bold text-slate-100 mb-2">Upload Payment Screenshot</h3>
+            <p className="text-slate-400 text-xs mb-4 leading-relaxed">
+              This payment request requires a screenshot upload to be verified.
+            </p>
+            <div className="space-y-4">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setScreenshotModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
+              />
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, loading: false })}
+                  className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUploadAndVerify}
+                  disabled={screenshotModal.loading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {screenshotModal.loading ? 'Uploading & Verifying...' : 'Verify Payment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

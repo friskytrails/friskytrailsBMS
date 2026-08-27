@@ -54,6 +54,15 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   const [generatedPaymentIds, setGeneratedPaymentIds] = useState({});
   const [copiedId, setCopiedId] = useState(null);
 
+  // Verification screenshot modal state
+  const [verificationModal, setVerificationModal] = useState({
+    isOpen: false,
+    serviceId: null,
+    paymentId: null,
+    file: null,
+    loading: false
+  });
+
   // Screenshot viewer
   const [viewingScreenshot, setViewingScreenshot] = useState(null);
 
@@ -77,8 +86,10 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   };
 
   useEffect(() => {
-    if (supplierType) {
+    if (supplierType && searchQuery.trim()) {
       handleSearchSupplier();
+    } else {
+      setSearchResults([]);
     }
   }, [searchQuery, supplierType]);
 
@@ -206,6 +217,22 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
 
   const handleVerifyPayment = async (serviceId, paymentId, status) => {
     if (user?.role !== 'admin') return alert('Only admins can verify payments');
+
+    // Find the service and payment to check if screenshot exists
+    const service = (booking.services || []).find(s => s.serviceId === serviceId);
+    const payment = service ? (service.payments || []).find(p => p.paymentId === paymentId) : null;
+
+    if (status === 'VERIFIED' && payment && !payment.screenshot) {
+      setVerificationModal({
+        isOpen: true,
+        serviceId,
+        paymentId,
+        file: null,
+        loading: false
+      });
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${serviceId}/payment/${paymentId}/verify`, {
         method: 'PATCH',
@@ -223,6 +250,38 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       }
     } catch (err) {
       alert('Error verifying payment');
+    }
+  };
+
+  const submitVerifyWithScreenshot = async () => {
+    if (!verificationModal.file) {
+      return alert('Please select a screenshot file first.');
+    }
+    setVerificationModal(prev => ({ ...prev, loading: true }));
+    try {
+      const formData = new FormData();
+      formData.append('status', 'VERIFIED');
+      formData.append('screenshot', verificationModal.file);
+
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${verificationModal.serviceId}/payment/${verificationModal.paymentId}/verify`, {
+        method: 'PATCH',
+        headers: { 
+          Authorization: `Bearer ${token}` 
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        onServiceUpdated(data.data);
+        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, loading: false });
+      } else {
+        alert(data.message || 'Error verifying payment');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error verifying payment');
+    } finally {
+      setVerificationModal(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -303,6 +362,48 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     } finally {
       setGeneratePayIdLoading(false);
     }
+  };
+
+  const handleCopyDetails = (service) => {
+    const paymentIdVal = generatedPaymentIds[service.serviceId];
+    if (!paymentIdVal) return;
+
+    const supplierNameVal = service.supplierName || service.outsourceName || 'Unknown Supplier';
+    
+    const serviceDateVal = (service.startDate && service.endDate)
+      ? `${new Date(service.startDate).toLocaleDateString('en-IN')} to ${new Date(service.endDate).toLocaleDateString('en-IN')}`
+      : service.startDate
+        ? new Date(service.startDate).toLocaleDateString('en-IN')
+        : 'N/A';
+
+    const supplier = service.supplier;
+    let accountDetailsVal = 'N/A';
+    if (supplier && typeof supplier === 'object') {
+      const accParts = [];
+      if (supplier.accountHolderName) accParts.push(`Holder: ${supplier.accountHolderName}`);
+      if (supplier.bankName) accParts.push(`Bank: ${supplier.bankName}`);
+      if (supplier.accountNumber) accParts.push(`A/C: ${supplier.accountNumber}`);
+      if (supplier.ifscCode) accParts.push(`IFSC: ${supplier.ifscCode}`);
+      if (supplier.upiId) accParts.push(`UPI ID: ${supplier.upiId}`);
+      if (supplier.upiNumber) accParts.push(`UPI No: ${supplier.upiNumber}`);
+      if (accParts.length > 0) accountDetailsVal = accParts.join('\n');
+    }
+
+    const paymentObj = (service.payments || []).find(p => p.paymentId === paymentIdVal);
+    const amountToPayVal = paymentObj ? `₹${paymentObj.paidAmount.toLocaleString('en-IN')}` : 'N/A';
+    const remarkVal = paymentObj ? paymentObj.details : 'N/A';
+
+    const copyText = `Payment ID: ${paymentIdVal}
+Supplier Name: ${supplierNameVal}
+Service Date: ${serviceDateVal}
+Account Details:
+${accountDetailsVal}
+Amount to Pay: ${amountToPayVal}
+Remark: ${remarkVal}`;
+
+    navigator.clipboard.writeText(copyText);
+    setCopiedId(paymentIdVal);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -573,10 +674,10 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
                       <span>B2B: ₹{service.b2bCost}</span>
                       <span>Due: ₹{service.totalDue}</span>
                     </div>
-                    {(service.payments || []).filter(p => p.paymentId && p.paymentId.startsWith("GPAY-")).length > 0 && (
+                    {(service.payments || []).filter(p => p.isGenerated || (p.paymentId && p.paymentId.startsWith("GPAY-"))).length > 0 && (
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="text-[10px] uppercase font-bold text-purple-400">Generated IDs:</span>
-                        {(service.payments || []).filter(p => p.paymentId && p.paymentId.startsWith("GPAY-")).map(p => (
+                        {(service.payments || []).filter(p => p.isGenerated || (p.paymentId && p.paymentId.startsWith("GPAY-"))).map(p => (
                           <span key={p.paymentId} className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                             {p.paymentId}
                           </span>
@@ -818,13 +919,9 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
                                 {generatedPaymentIds[service.serviceId]}
                               </span>
                               <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(generatedPaymentIds[service.serviceId]);
-                                  setCopiedId(generatedPaymentIds[service.serviceId]);
-                                  setTimeout(() => setCopiedId(null), 2000);
-                                }}
+                                onClick={() => handleCopyDetails(service)}
                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                                title="Copy to Clipboard"
+                                title="Copy Payment details to Clipboard"
                               >
                                 {copiedId === generatedPaymentIds[service.serviceId] ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                               </button>
@@ -956,6 +1053,40 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
             </div>
             <div className="p-4 flex items-center justify-center max-h-[70vh] overflow-auto bg-slate-950">
               <img src={viewingScreenshot} alt="Payment Screenshot" className="max-w-full max-h-[65vh] object-contain rounded-lg" />
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Verification Modal for Generated IDs */}
+      {verificationModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl overflow-hidden shadow-2xl p-6 animate-scaleUp">
+            <h3 className="text-lg font-bold text-slate-100 mb-2">Upload Payment Screenshot</h3>
+            <p className="text-slate-400 text-xs mb-4 leading-relaxed">
+              This payment request requires a screenshot upload to be verified.
+            </p>
+            <div className="space-y-4">
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setVerificationModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
+              />
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, loading: false })}
+                  className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitVerifyWithScreenshot}
+                  disabled={verificationModal.loading}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white transition-colors disabled:opacity-50"
+                >
+                  {verificationModal.loading ? 'Uploading & Verifying...' : 'Verify Payment'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

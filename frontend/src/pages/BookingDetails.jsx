@@ -117,6 +117,9 @@ const BookingDetails = () => {
   // Payment Table Source Filter State
   const [paymentSourceFilter, setPaymentSourceFilter] = useState('ALL');
 
+  // Service Payment Filter State
+  const [servicePaymentFilter, setServicePaymentFilter] = useState('ALL');
+
   // Profit Margin State
   const [profitMarginInput, setProfitMarginInput] = useState(0);
   const [togglingTaskId, setTogglingTaskId] = useState(null);
@@ -896,7 +899,8 @@ const BookingDetails = () => {
   const isCreator = booking?.createdBy && (booking.createdBy._id || booking.createdBy) === user?.id;
   const isAssigned = booking?.assignedTo && booking.assignedTo.some(emp => (emp._id || emp) === user?.id);
   const isAdmin = user?.role === 'admin';
-  const canEdit = isAdmin || isCreator || isAssigned;
+  const isEmployee = user?.role === 'employee';
+  const canEdit = isAdmin || isCreator || isAssigned || (isEmployee && booking?.status !== 'Pending');
 
   const assignedIds = booking.assignedTo?.map((u) => (u._id || u).toString()) || [];
   const unassignedEmployees = employees.filter(
@@ -1643,6 +1647,27 @@ const BookingDetails = () => {
                 {/* Bottom: Payments related to Service */}
                 <div className="pt-6 border-t border-slate-850">
                   <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-wider mb-3">Payments related to Service</h3>
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <span className="text-xs font-extrabold text-slate-400 uppercase">Filter</span>
+                    {[
+                      { label: 'ALL', value: 'ALL' },
+                      { label: 'Traveller to Supplier', value: 'Traveller to Supplier' },
+                      { label: 'Company to Supplier', value: 'Company to Supplier' },
+                      { label: 'Supplier to Company', value: 'Supplier to Company' },
+                      { label: 'Supplier to Traveller', value: 'Supplier to Traveller' },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setServicePaymentFilter(opt.value)}
+                        className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${servicePaymentFilter === opt.value
+                            ? 'bg-[#E65F00] text-white border-[#E65F00]'
+                            : 'border-[#E65F00] text-[#E65F00] hover:bg-[#E65F00]/10'
+                          }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                   {(() => {
                     const allServicePayments = [];
                     (booking.services || []).forEach(svc => {
@@ -1656,8 +1681,14 @@ const BookingDetails = () => {
                         });
                       });
                     });
-                    if (allServicePayments.length === 0) {
-                      return <p className="text-xs text-slate-600 italic mt-1">No service payments recorded.</p>;
+                    const filteredServicePayments = servicePaymentFilter === 'ALL'
+                      ? allServicePayments
+                      : allServicePayments.filter(sp => {
+                          const fromTo = `${sp.paymentFrom} to ${sp.paymentTo}`;
+                          return fromTo === servicePaymentFilter;
+                        });
+                    if (filteredServicePayments.length === 0) {
+                      return <p className="text-xs text-slate-600 italic mt-1">No service payments recorded{servicePaymentFilter !== 'ALL' ? ` for "${servicePaymentFilter}"` : ''}.</p>;
                     }
                     return (
                       <div className="bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto shadow-inner">
@@ -1678,7 +1709,7 @@ const BookingDetails = () => {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-850">
-                            {allServicePayments.map(sp => (
+                            {filteredServicePayments.map(sp => (
                               <tr key={sp.paymentId} className="text-xs text-slate-300 hover:bg-slate-900/40 transition-colors">
                                 <td className="py-3.5 px-4 font-mono font-bold text-indigo-400">{sp.paymentId}</td>
                                 <td className="py-3.5 px-3">

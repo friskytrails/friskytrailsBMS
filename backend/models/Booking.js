@@ -88,6 +88,7 @@ const ServicePaymentSchema = new mongoose.Schema({
   addedBy: { type: String, required: true },
   details: { type: String, trim: true, default: '' },
   verified: { type: Boolean, default: false },
+  isGenerated: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // --- Service Schema (supplier services attached to a booking) ---
