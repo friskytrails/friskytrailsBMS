@@ -19,7 +19,12 @@ import {
   Edit,
   Check,
   Lock,
-  MessageSquare
+  MessageSquare,
+  Send,
+  CheckCheck,
+  Paperclip,
+  ExternalLink,
+  MessageCircle
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
@@ -72,6 +77,8 @@ const BookingDetails = () => {
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
   const [leadLoading, setLeadLoading] = useState(false);
   const [leadError, setLeadError] = useState('');
+  const [newCrmNote, setNewCrmNote] = useState('');
+  const [addingCrmNote, setAddingCrmNote] = useState(false);
 
   // Tab State
   const [activeTab, setActiveTab] = useState('overview');
@@ -236,6 +243,215 @@ const BookingDetails = () => {
     } finally {
       setLeadLoading(false);
     }
+  };
+
+  const handleAddCrmNote = async (e) => {
+    e.preventDefault();
+    if (!newCrmNote.trim() || !leadData) return;
+    const mobileNumber = leadData.phone || leadData.mobileNumber;
+    if (!mobileNumber) return;
+
+    setAddingCrmNote(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/lead-details/${mobileNumber}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          text: newCrmNote.trim(),
+          notes: newCrmNote.trim(),
+          author: user?.name || 'Agent'
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLeadData(data.data);
+        setNewCrmNote('');
+      } else {
+        alert(data.message || 'Failed to add note');
+      }
+    } catch (err) {
+      console.error('Error adding CRM note:', err);
+      alert('Connection error');
+    } finally {
+      setAddingCrmNote(false);
+    }
+  };
+
+  const getAuthorColor = (name = '') => {
+    const colors = [
+      '#25D366', // WhatsApp Green
+      '#34B7F1', // Light Blue
+      '#F59E0B', // Amber
+      '#EC4899', // Pink
+      '#8B5CF6', // Purple
+      '#10B981', // Emerald
+      '#06B6D4', // Cyan
+      '#F97316', // Orange
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const formatChatDateTime = (msg) => {
+    if (!msg) return '—';
+    const dateObj = typeof msg === 'object' && msg !== null ? msg.date : msg;
+    if (dateObj && dateObj instanceof Date && !isNaN(dateObj.getTime()) && dateObj.getTime() !== 0) {
+      const dateStr = dateObj.toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+      const timeStr = dateObj.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      return `${dateStr}, ${timeStr}`;
+    }
+
+    const raw = (msg && msg.raw) || {};
+    const rawTime = raw.timestamp || raw.date || raw.time || raw.createdAt;
+    if (rawTime) return String(rawTime);
+
+    return '—';
+  };
+
+  const formatChatDateHeader = (msg) => {
+    const dateObj = msg?.date;
+    if (dateObj && dateObj instanceof Date && !isNaN(dateObj.getTime()) && dateObj.getTime() !== 0) {
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+
+      if (dateObj.toDateString() === today.toDateString()) {
+        return 'TODAY';
+      } else if (dateObj.toDateString() === yesterday.toDateString()) {
+        return 'YESTERDAY';
+      } else {
+        return dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+    }
+
+    const raw = msg?.raw || {};
+    const rawTime = raw.timestamp || raw.date || raw.time || raw.createdAt;
+    if (rawTime) {
+      return String(rawTime).toUpperCase();
+    }
+
+    return 'ACTIVITY LOG';
+  };
+
+  const getMergedChatMessages = (leadDataObj) => {
+    if (!leadDataObj) return [];
+
+    const rawNotes = leadDataObj.notes || [];
+    const rawHistory = leadDataObj.interactionHistory || [];
+    const rawAttachments = leadDataObj.attachments || leadDataObj.pdfs || [];
+
+    const items = [];
+    const itemKeys = new Set();
+
+    const parseDate = (val) => {
+      if (!val) return new Date(0);
+      if (val instanceof Date) return isNaN(val.getTime()) ? new Date(0) : val;
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) return d;
+
+      if (typeof val === 'string') {
+        const timeMatch = val.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
+        if (timeMatch) {
+          const now = new Date();
+          let hours = parseInt(timeMatch[1], 10);
+          const minutes = parseInt(timeMatch[2], 10);
+          const ampm = timeMatch[3];
+          if (ampm) {
+            if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+            if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+          }
+          now.setHours(hours, minutes, 0, 0);
+          return now;
+        }
+      }
+
+      return new Date(0);
+    };
+
+    rawNotes.forEach((note, idx) => {
+      const d = parseDate(note.timestamp || note.date || note.createdAt);
+      const author = note.author || note.agent || note.addedBy || note.user || note.sender || 'Agent';
+      const text = note.text || note.notes || note.message || note.content || '';
+      const fileUrl = note.pdfUrl || note.attachmentUrl || note.imageUrl || note.fileUrl || note.attachment || '';
+
+      const key = `${d.getTime()}-${author}-${text.slice(0, 20)}`;
+      itemKeys.add(key);
+
+      items.push({
+        id: note._id || note.id || `note-${idx}`,
+        type: 'note',
+        author,
+        text,
+        fileUrl,
+        fileName: note.fileName || note.name || note.title || '',
+        date: d,
+        raw: note
+      });
+    });
+
+    rawHistory.forEach((hist, idx) => {
+      const d = parseDate(hist.date || hist.timestamp || hist.createdAt);
+      const author = hist.author || hist.type || hist.agent || 'Interaction';
+      const text = hist.notes || hist.text || hist.message || hist.content || '';
+      const fileUrl = hist.pdfUrl || hist.attachmentUrl || hist.imageUrl || hist.fileUrl || hist.attachment || '';
+
+      const key = `${d.getTime()}-${author}-${text.slice(0, 20)}`;
+      if (!itemKeys.has(key)) {
+        itemKeys.add(key);
+        items.push({
+          id: hist._id || hist.id || `hist-${idx}`,
+          type: 'interaction',
+          author,
+          text,
+          fileUrl,
+          fileName: hist.fileName || hist.name || hist.title || '',
+          date: d,
+          raw: hist
+        });
+      }
+    });
+
+    rawAttachments.forEach((att, idx) => {
+      const fileUrl = att.pdfUrl || att.attachmentUrl || att.imageUrl || att.fileUrl || att.url || att.path || '';
+      if (fileUrl) {
+        const d = parseDate(att.date || att.timestamp || att.createdAt);
+        const author = att.author || att.addedBy || att.agent || 'Attachment';
+        const text = att.title || att.name || att.text || att.notes || '';
+
+        const key = `attach-${fileUrl}`;
+        if (!itemKeys.has(key)) {
+          itemKeys.add(key);
+          items.push({
+            id: att._id || att.id || `att-${idx}`,
+            type: 'attachment',
+            author,
+            text,
+            fileUrl,
+            fileName: att.fileName || att.name || att.title || '',
+            date: d,
+            raw: att
+          });
+        }
+      }
+    });
+
+    items.sort((a, b) => a.date - b.date);
+
+    return items;
   };
 
   // Add employee to assignedTo
@@ -1676,7 +1892,9 @@ const BookingDetails = () => {
                           ...p,
                           _serviceId: svc.serviceId,
                           _supplierType: svc.supplierType,
-                          _supplierName: svc.supplierName || svc.outsourceName || 'Unknown',
+                          _supplierName: (svc.supplier && typeof svc.supplier === 'object')
+                            ? (svc.supplier.businessName || svc.supplier.fullName || svc.supplierName || svc.outsourceName || 'Unknown')
+                            : (svc.supplierName || svc.outsourceName || 'Unknown'),
                           _supplierSupplierId: svc.supplierSupplierId
                         });
                       });
@@ -1872,212 +2090,224 @@ const BookingDetails = () => {
         </div>
       )}
 
-      {/* 2. Manual Payment Entry Modal (Replicating exact layout of Screenshot 1) */}
-      {/* Lead Details Modal */}
+      {/* Lead Details Modal — WhatsApp Chat Style */}
       {isLeadModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-slate-800">
-              <h2 className="text-xl font-extrabold text-slate-100 flex items-center gap-2">
-                <Users className="w-6 h-6 text-indigo-500" />
-                CRM Lead Details
-              </h2>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-[#111b21] border border-[#222d34] rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-white">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-[#222d34] bg-[#202c33]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[#00a884]/20 border border-[#00a884]/40 flex items-center justify-center text-[#25d366]">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
+                    CRM Lead Details & Chat Stream
+                  </h2>
+                  <p className="text-xs text-[#e2e8f0] font-bold">WhatsApp-style chronological activity thread</p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsLeadModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                className="text-[#e2e8f0] hover:text-white transition-colors p-1.5 rounded-lg hover:bg-[#2a3942] cursor-pointer"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[70vh]">
+            <div className="p-5 overflow-y-auto space-y-4 bg-[#0b141a]">
               {leadLoading ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="mt-3 text-slate-400 text-sm">Fetching Lead Data from CRM...</p>
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="w-10 h-10 border-4 border-[#00a884] border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-3 text-[#e2e8f0] text-sm font-bold">Fetching Lead Data from CRM...</p>
                 </div>
               ) : leadError ? (
                 <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-5 text-center">
                   <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
-                  <p className="text-rose-400 font-medium">{leadError}</p>
+                  <p className="text-rose-400 font-bold">{leadError}</p>
                 </div>
               ) : leadData ? (
-                <div className="space-y-5">
+                <div className="space-y-4">
 
-                  {/* ── Product / Tour ── */}
-                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 flex items-center gap-3">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center">
-                      <MapPin className="w-5 h-5 text-slate-400" />
+                  {/* ── Product & Key Info Summary Cards ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="bg-[#162026] border border-[#2a3942] rounded-xl p-3.5 flex items-center gap-3 shadow-md">
+                      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#202c33] border border-[#374955] flex items-center justify-center">
+                        <MapPin className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-[10px] font-black text-[#94a3b8] uppercase tracking-widest">Product / Tour</span>
+                        <span className="block text-xs font-black text-white truncate leading-tight mt-0.5">
+                          {leadData.product || '—'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <span className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Product / Tour</span>
-                      <span className="block text-lg font-extrabold text-slate-100 truncate leading-tight mt-0.5">
-                        {leadData.product || '—'}
-                      </span>
+
+                    <div className="bg-[#162026] border border-[#2a3942] rounded-xl p-3.5 flex items-center justify-between shadow-md">
+                      <div>
+                        <span className="block text-[10px] font-black text-[#94a3b8] uppercase tracking-widest">Full Name / Phone</span>
+                        <span className="block text-xs font-black text-white truncate mt-0.5">
+                          {leadData.name || leadData.fullName || 'NA'} • {leadData.phone || leadData.mobileNumber || '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#162026] border border-[#2a3942] rounded-xl p-3.5 flex items-center justify-between shadow-md">
+                      <div>
+                        <span className="block text-[10px] font-black text-[#94a3b8] uppercase tracking-widest mb-1">Status / Lead ID</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            leadData.status === 'New' ? 'bg-blue-500/25 text-blue-300 border border-blue-400/60' :
+                            leadData.status === 'Contacted' ? 'bg-amber-500/25 text-amber-300 border border-amber-400/60' :
+                            leadData.status === 'Converted' || leadData.status === 'Booked' ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/60' :
+                            'bg-[#202c33] text-white border border-[#374955]'
+                          }`}>
+                            {leadData.status || '—'}
+                          </span>
+                          <span className="text-[#38bdf8] bg-[#0284c7]/25 border border-[#38bdf8]/60 text-xs font-mono font-black px-2.5 py-0.5 rounded-lg shadow-sm tracking-wide">
+                            #{leadData.leadId || leadData.id || leadData.customLeadId || (leadData._id ? leadData._id.toString().slice(-6) : '—')}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* ── Key Info Cards ── */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Full Name</span>
-                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.name || leadData.fullName || '—'}</span>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Phone Number</span>
-                      <span className="text-slate-200 font-bold text-sm truncate block">{leadData.phone || leadData.mobileNumber || '—'}</span>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Status</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        leadData.status === 'New' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                        leadData.status === 'Contacted' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                        leadData.status === 'Converted' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        'bg-slate-800 text-slate-300'
-                      }`}>
-                        {leadData.status || '—'}
-                      </span>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5">
-                      <span className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">CRM Lead ID</span>
-                      <span className="text-slate-400 font-semibold text-sm truncate block">#{leadData.leadId || leadData.id || '—'}</span>
-                    </div>
-                  </div>
-
-                  {/* ── SECTION: CRM Notes ── */}
+                  {/* ── WHATSAPP CHAT STREAM SECTION ── */}
                   {(() => {
-                    const allItems = leadData.notes || leadData.interactionHistory || [];
-                    const noteItems = allItems
-                      .filter(item => !item.imageUrl && !item.attachmentUrl && !item.pdfUrl)
-                      .sort((a, b) => new Date(a.timestamp || a.date || 0) - new Date(b.timestamp || b.date || 0));
-                    const attachmentItems = allItems
-                      .filter(item => item.imageUrl || item.attachmentUrl || item.pdfUrl)
-                      .sort((a, b) => new Date(a.timestamp || a.date || 0) - new Date(b.timestamp || b.date || 0));
+                    const mergedMessages = getMergedChatMessages(leadData);
+
+                    const groupedChatMessages = [];
+                    let lastDateHeader = '';
+
+                    mergedMessages.forEach((msg) => {
+                      const dateHeader = formatChatDateHeader(msg);
+                      if (dateHeader !== lastDateHeader) {
+                        groupedChatMessages.push({ type: 'date-header', title: dateHeader, id: `header-${dateHeader}-${msg.id}` });
+                        lastDateHeader = dateHeader;
+                      }
+                      groupedChatMessages.push(msg);
+                    });
 
                     return (
-                      <>
-                        {/* Notes Section */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                            <Users className="w-4 h-4 text-amber-400" />
-                            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                              CRM Notes
-                            </h3>
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-                              {noteItems.length}
-                            </span>
-                          </div>
-                          {noteItems.length > 0 ? (
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                              {noteItems.map((item, idx) => (
-                                <div key={`note-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
-                                  <div className="flex justify-between items-center text-xs">
-                                    <span className="font-bold text-amber-400 flex items-center gap-1">
-                                      <Users className="w-3 h-3" />
-                                      {item.author || item.type || 'Agent'}
-                                    </span>
-                                    <span className="text-slate-500 text-[11px] font-mono">
-                                      {formatDateTime(item.timestamp || item.date)}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
-                                    {item.text || item.notes || item.message || '—'}
-                                  </p>
-                                </div>
-                              ))}
+                      <div className="bg-[#0b141a] border border-[#222d34] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+                        
+                        {/* WhatsApp Top Header Bar */}
+                        <div className="bg-[#202c33] border-b border-[#2a3942] px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-10 h-10 rounded-full bg-[#00a884]/20 border border-[#00a884]/40 flex items-center justify-center font-extrabold text-[#25d366]">
+                                {leadData.name ? leadData.name.charAt(0).toUpperCase() : <Users className="w-5 h-5 text-[#25d366]" />}
+                              </div>
+                              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#202c33]" title="Active Lead"></span>
                             </div>
-                          ) : (
-                            <p className="text-xs text-slate-600 italic pl-1">No notes recorded.</p>
-                          )}
+                            <div>
+                              <h4 className="text-sm font-black text-white flex items-center gap-2">
+                                <span>{leadData.name || leadData.fullName || leadData.phone || 'CRM Lead Chat'}</span>
+                                <span className="text-[10px] bg-[#25d366]/20 text-[#25d366] border border-[#25d366]/40 px-2 py-0.5 rounded-full font-mono font-bold">
+                                  {leadData.status || 'Active'}
+                                </span>
+                              </h4>
+                              <p className="text-[11px] text-[#cbd5e1] font-mono font-bold">
+                                {mergedMessages.length} Messages & Attachments • Chronological Stream
+                              </p>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Interaction History Section */}
-                        {leadData.interactionHistory && leadData.interactionHistory.length > 0 && !leadData.notes && (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                              <Calendar className="w-4 h-4 text-cyan-400" />
-                              <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                                Interaction History
-                              </h3>
-                              <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-                                {leadData.interactionHistory.length}
-                              </span>
+                        {/* WhatsApp Message Viewport */}
+                        <div className="p-4 max-h-[460px] min-h-[300px] overflow-y-auto space-y-3 bg-[#0b141a] custom-scrollbar">
+                          {mergedMessages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-[#cbd5e1]">
+                              <MessageSquare className="w-12 h-12 text-[#94a3b8] mb-2 opacity-90" />
+                              <p className="text-sm font-bold text-white">No notes or chat activity yet.</p>
+                              <p className="text-xs text-[#cbd5e1]">No notes or chat activity recorded in CRM.</p>
                             </div>
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                              {[...leadData.interactionHistory]
-                                .sort((a, b) => new Date(a.date || a.timestamp || 0) - new Date(b.date || b.timestamp || 0))
-                                .map((item, idx) => (
-                                  <div key={`hist-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1">
-                                    <div className="flex justify-between items-center text-xs">
-                                      <span className="font-bold text-cyan-400 flex items-center gap-1.5">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-                                        {item.type || 'Interaction'}
-                                      </span>
-                                      <span className="text-slate-500 text-[11px] font-mono">
-                                        {formatDateTime(item.date || item.timestamp)}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm text-slate-200 leading-relaxed break-words whitespace-pre-wrap">
-                                      {item.notes || item.text || item.message || '—'}
-                                    </p>
-                                  </div>
-                                ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* PDF & Attachments Section */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                            <FileText className="w-4 h-4 text-emerald-400" />
-                            <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider">
-                              Attachments & PDFs
-                            </h3>
-                            <span className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-                              {attachmentItems.length}
-                            </span>
-                          </div>
-                          {attachmentItems.length > 0 ? (
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                              {attachmentItems.map((item, idx) => {
-                                const url = item.pdfUrl || item.attachmentUrl || item.imageUrl;
-                                const isPdf = url && url.endsWith('.pdf');
+                          ) : (
+                            groupedChatMessages.map((item) => {
+                              if (item.type === 'date-header') {
                                 return (
-                                  <div key={`attach-${idx}`} className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${isPdf ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-indigo-500/10 border border-indigo-500/20'}`}>
-                                        <FileImage className={`w-4.5 h-4.5 ${isPdf ? 'text-rose-400' : 'text-indigo-400'}`} />
-                                      </div>
-                                      <div className="min-w-0">
-                                        <p className="text-xs text-slate-300 font-semibold truncate">
-                                          {item.text || item.notes || item.message || (isPdf ? 'PDF Document' : 'Attachment')}
-                                        </p>
-                                        <span className="text-[10px] text-slate-550 font-mono">
-                                          {item.author || item.type || ''} {formatDateTime(item.timestamp || item.date)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <a
-                                      href={url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                                        isPdf
-                                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                                          : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20'
-                                      }`}
-                                    >
-                                      {isPdf ? 'Open PDF' : 'View'}
-                                    </a>
+                                  <div key={item.id} className="flex justify-center my-3">
+                                    <span className="bg-[#182229] border border-[#2a3942] text-[#38bdf8] text-[11px] font-black px-4 py-1 rounded-full uppercase tracking-wider shadow-md">
+                                      {item.title}
+                                    </span>
                                   </div>
                                 );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-slate-600 italic pl-1">No attachments or PDFs found.</p>
+                              }
+
+                              const msg = item;
+                              const authorColor = getAuthorColor(msg.author);
+                              const fileUrl = msg.fileUrl;
+                              const isPdf = fileUrl && (fileUrl.toLowerCase().endsWith('.pdf') || fileUrl.toLowerCase().includes('/pdf'));
+                              const isImage = fileUrl && (fileUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) || fileUrl.startsWith('data:image'));
+
+                              return (
+                                <div key={msg.id} className="flex flex-col items-start max-w-[88%] sm:max-w-[80%]">
+                                  <div className="bg-[#202c33] border border-[#2a3942] rounded-2xl rounded-tl-xs p-3.5 shadow-md w-full relative">
+                                    
+                                    {/* Author Tag */}
+                                    <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-[#2a3942]/80">
+                                      <span className="text-xs font-black flex items-center gap-1.5" style={{ color: authorColor }}>
+                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: authorColor }}></span>
+                                        {msg.author || 'Agent'}
+                                      </span>
+                                      <span className="text-[10px] text-[#cbd5e1] font-mono font-bold capitalize bg-[#111b21] border border-[#2a3942] px-2 py-0.5 rounded">
+                                        {msg.type === 'interaction' ? 'Interaction' : msg.type === 'attachment' ? 'Attachment' : 'Note'}
+                                      </span>
+                                    </div>
+
+                                    {/* Message Text */}
+                                    {msg.text && (
+                                      <p className="text-sm text-[#f1f5f9] leading-relaxed whitespace-pre-wrap break-words font-sans font-medium">
+                                        {msg.text}
+                                      </p>
+                                    )}
+
+                                    {/* Inline Attachment / PDF Card */}
+                                    {fileUrl && (
+                                      <div className={`mt-2 bg-[#111b21] border border-[#2a3942] rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${msg.text ? 'pt-2' : ''}`}>
+                                        <div className="flex items-center gap-3 min-w-0">
+                                          <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center ${isPdf ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400' : isImage ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400' : 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-400'}`}>
+                                            {isPdf ? <FileText className="w-5 h-5" /> : isImage ? <FileImage className="w-5 h-5" /> : <Paperclip className="w-5 h-5" />}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-extrabold text-white truncate">
+                                              {msg.fileName || (isPdf ? 'PDF Document' : isImage ? 'Image File' : 'Attachment File')}
+                                            </p>
+                                            <span className="text-[10px] text-[#cbd5e1] font-mono block font-bold">
+                                              {isPdf ? 'PDF Attachment' : isImage ? 'Image Attachment' : 'Attached Document'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <a
+                                          href={fileUrl.startsWith('data:') || fileUrl.startsWith('http') ? fileUrl : `${API_BASE}/${fileUrl}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className={`w-full sm:w-auto px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                                            isPdf 
+                                              ? 'bg-rose-600 hover:bg-rose-500 text-white' 
+                                              : 'bg-[#00a884] hover:bg-[#029071] text-white'
+                                          }`}
+                                        >
+                                          <span>{isPdf ? 'Open PDF' : 'View File'}</span>
+                                          <ExternalLink className="w-3.5 h-3.5" />
+                                        </a>
+                                      </div>
+                                    )}
+
+                                    {/* Time & Double Checkmark Footer */}
+                                    <div className="flex items-center justify-end gap-1.5 mt-2 text-[10px] text-[#38bdf8] font-mono font-black">
+                                      <span>{formatChatDateTime(msg)}</span>
+                                      <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
+                                    </div>
+
+                                  </div>
+                                </div>
+                              );
+                            })
                           )}
                         </div>
-                      </>
+                      </div>
                     );
                   })()}
                 </div>
@@ -2085,14 +2315,15 @@ const BookingDetails = () => {
             </div>
             
             {/* Modal Footer */}
-            <div className="p-6 border-t border-slate-800 flex justify-end">
+            <div className="p-4 border-t border-[#222d34] flex justify-end bg-[#202c33]">
               <button
                 onClick={() => setIsLeadModalOpen(false)}
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                className="px-5 py-2.5 bg-[#2a3942] hover:bg-[#374955] text-white text-sm font-bold rounded-xl transition-colors cursor-pointer border border-[#374955]"
               >
                 Close
               </button>
             </div>
+
           </div>
         </div>
       )}

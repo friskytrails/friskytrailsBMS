@@ -313,7 +313,7 @@ router.get('/pending-payments', protect, adminOnly, async (req, res) => {
                 pendingPayments.push({
                   bookingObjectId: booking._id,
                   bookingId: booking.bookingId,
-                  travellerName: `${booking.travellerName} (${service.supplierType}: ${service.supplierName || 'Unknown'})`,
+                  travellerName: `${booking.travellerName} (${service.supplierType}: ${(service.supplier && service.supplier.businessName) || service.supplierName || 'Unknown'})`,
                   packageName: booking.packageName,
                   location: booking.location,
                   paymentId: payment.paymentId || payment._id,
@@ -409,7 +409,7 @@ router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
                   location: booking.location,
                   serviceId: service.serviceId,
                   supplierType: service.supplierType,
-                  supplierName: service.supplierName,
+                  supplierName: (service.supplier && service.supplier.businessName) || service.supplierName || 'Unknown',
                   paymentId: payment.paymentId,
                   paymentDate: payment.paymentDate,
                   paymentFrom: payment.paymentFrom,
@@ -1361,7 +1361,8 @@ router.post('/:id/services', protect, verifiedOnly, async (req, res) => {
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.status(201).json({ success: true, message: `Service ${serviceId} added`, data: updatedBooking });
   } catch (error) {
@@ -1430,7 +1431,8 @@ router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) =
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('services.supplier');
 
     res.json({ success: true, message: 'Service updated', data: updatedBooking });
   } catch (error) {

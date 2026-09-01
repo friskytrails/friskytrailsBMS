@@ -6,6 +6,13 @@ import {
   Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye, Copy
 } from 'lucide-react';
 
+const getSupplierDisplayName = (service) => {
+  if (service?.supplier && typeof service.supplier === 'object') {
+    return service.supplier.businessName || service.supplier.fullName || service.supplierName || service.outsourceName || 'Unknown Supplier';
+  }
+  return service?.supplierName || service?.outsourceName || 'Unknown Supplier';
+};
+
 const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   const [services, setServices] = useState(booking.services || []);
   const [isAdding, setIsAdding] = useState(false);
@@ -114,7 +121,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       const payload = {
         supplierType,
         supplier: selectedSupplier?._id,
-        supplierName: selectedSupplier?.fullName || selectedSupplier?.businessName,
+        supplierName: selectedSupplier?.businessName || selectedSupplier?.fullName,
         supplierSupplierId: selectedSupplier?.supplierId,
         b2bCost: formData.b2bCost,
         collectionBySupplier: formData.collectionBySupplier,
@@ -368,7 +375,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     const paymentIdVal = generatedPaymentIds[service.serviceId];
     if (!paymentIdVal) return;
 
-    const supplierNameVal = service.supplierName || service.outsourceName || 'Unknown Supplier';
+    const supplierNameVal = getSupplierDisplayName(service);
     
     const serviceDateVal = (service.startDate && service.endDate)
       ? `${new Date(service.startDate).toLocaleDateString('en-IN')} to ${new Date(service.endDate).toLocaleDateString('en-IN')}`
@@ -584,7 +591,7 @@ Remark: ${remarkVal}`;
               {selectedSupplier ? (
                 <div className="flex items-center justify-between bg-indigo-500/10 border border-indigo-500/20 p-3 rounded-lg">
                   <div>
-                    <span className="block text-sm font-bold text-indigo-400">{selectedSupplier.fullName || selectedSupplier.businessName}</span>
+                    <span className="block text-sm font-bold text-indigo-400">{selectedSupplier.businessName || selectedSupplier.fullName}</span>
                     <span className="text-xs text-indigo-300/70">{selectedSupplier.supplierId} | {selectedSupplier.city}</span>
                   </div>
                   <button onClick={() => setSelectedSupplier(null)} className="text-indigo-400 hover:text-indigo-300">
@@ -600,7 +607,7 @@ Remark: ${remarkVal}`;
                       className="flex justify-between items-center p-3 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:border-indigo-500/50 transition-colors"
                     >
                       <div>
-                        <div className="text-sm font-bold text-slate-200">{s.fullName || s.businessName}</div>
+                        <div className="text-sm font-bold text-slate-200">{s.businessName || s.fullName}</div>
                         <div className="text-xs text-slate-500">{s.supplierId} | {s.city}</div>
                       </div>
                       <Plus className="w-4 h-4 text-slate-400" />
@@ -659,7 +666,7 @@ Remark: ${remarkVal}`;
                       </span>
                     </div>
                     <h3 className="text-lg font-bold text-slate-100 mt-1 flex items-center gap-2 flex-wrap">
-                      <span>{service.supplierName || service.outsourceName || 'Unknown Supplier'}</span>
+                      <span>{getSupplierDisplayName(service)}</span>
                       {service.supplierSupplierId && (
                         <Link 
                           to={`/supplier/${service.supplierSupplierId}`}

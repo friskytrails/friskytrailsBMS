@@ -410,7 +410,7 @@ const AdminDashboard = () => {
     const paymentIdVal = p.paymentId;
     if (!paymentIdVal) return;
 
-    const supplierNameVal = p.supplierName || 'Unknown Supplier';
+    const supplierNameVal = (p.supplier && typeof p.supplier === 'object' && p.supplier.businessName) || p.supplierName || 'Unknown Supplier';
     
     const serviceDateVal = (p.startDate && p.endDate)
       ? `${new Date(p.startDate).toLocaleDateString('en-IN')} to ${new Date(p.endDate).toLocaleDateString('en-IN')}`
@@ -1027,7 +1027,7 @@ Remark: ${remarkVal}`;
                               <div className="flex flex-col">
                                 <span className="font-semibold text-slate-100">{p.travellerName}</span>
                                 <span className="text-xs text-slate-500">
-                                  {p.supplierType}: {p.supplierName || 'Unknown'}
+                                  {p.supplierType}: {(p.supplier && typeof p.supplier === 'object' && p.supplier.businessName) || p.supplierName || 'Unknown'}
                                 </span>
                               </div>
                             </td>
