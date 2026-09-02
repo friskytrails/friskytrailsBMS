@@ -357,16 +357,40 @@ const BookingDetails = () => {
     const items = [];
     const itemKeys = new Set();
 
-    const parseDate = (val) => {
-      if (!val) return new Date(0);
+    // Extract a Date from a MongoDB ObjectId hex string (first 8 hex chars = unix timestamp)
+    const getDateFromObjectId = (oid) => {
+      if (!oid) return null;
+      const hex = typeof oid === 'string' ? oid : String(oid);
+      if (hex.length >= 24 && /^[0-9a-fA-F]{24}$/.test(hex)) {
+        const timestampSec = parseInt(hex.substring(0, 8), 16);
+        const d = new Date(timestampSec * 1000);
+        if (!isNaN(d.getTime()) && d.getTime() > 0) return d;
+      }
+      return null;
+    };
+
+    const parseDate = (val, itemObj) => {
+      if (!val) {
+        // No explicit date/timestamp — try ObjectId
+        if (itemObj) {
+          const oidDate = getDateFromObjectId(itemObj.id) || getDateFromObjectId(itemObj._id);
+          if (oidDate) return oidDate;
+        }
+        return new Date(0);
+      }
       if (val instanceof Date) return isNaN(val.getTime()) ? new Date(0) : val;
       const d = new Date(val);
-      if (!isNaN(d.getTime())) return d;
+      if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d;
 
       if (typeof val === 'string') {
         const timeMatch = val.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
         if (timeMatch) {
-          const now = new Date();
+          // Time-only string (e.g. "11:16 am") — get the date from the ObjectId
+          let baseDate = null;
+          if (itemObj) {
+            baseDate = getDateFromObjectId(itemObj.id) || getDateFromObjectId(itemObj._id);
+          }
+          const dateToUse = baseDate ? new Date(baseDate) : new Date();
           let hours = parseInt(timeMatch[1], 10);
           const minutes = parseInt(timeMatch[2], 10);
           const ampm = timeMatch[3];
@@ -374,16 +398,22 @@ const BookingDetails = () => {
             if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
             if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
           }
-          now.setHours(hours, minutes, 0, 0);
-          return now;
+          dateToUse.setHours(hours, minutes, 0, 0);
+          return dateToUse;
         }
+      }
+
+      // Last resort — try ObjectId
+      if (itemObj) {
+        const oidDate = getDateFromObjectId(itemObj.id) || getDateFromObjectId(itemObj._id);
+        if (oidDate) return oidDate;
       }
 
       return new Date(0);
     };
 
     rawNotes.forEach((note, idx) => {
-      const d = parseDate(note.timestamp || note.date || note.createdAt);
+      const d = parseDate(note.timestamp || note.date || note.createdAt, note);
       const author = note.author || note.agent || note.addedBy || note.user || note.sender || 'Agent';
       const text = note.text || note.notes || note.message || note.content || '';
       const fileUrl = note.pdfUrl || note.attachmentUrl || note.imageUrl || note.fileUrl || note.attachment || '';
@@ -404,7 +434,7 @@ const BookingDetails = () => {
     });
 
     rawHistory.forEach((hist, idx) => {
-      const d = parseDate(hist.date || hist.timestamp || hist.createdAt);
+      const d = parseDate(hist.date || hist.timestamp || hist.createdAt, hist);
       const author = hist.author || hist.type || hist.agent || 'Interaction';
       const text = hist.notes || hist.text || hist.message || hist.content || '';
       const fileUrl = hist.pdfUrl || hist.attachmentUrl || hist.imageUrl || hist.fileUrl || hist.attachment || '';
@@ -428,7 +458,7 @@ const BookingDetails = () => {
     rawAttachments.forEach((att, idx) => {
       const fileUrl = att.pdfUrl || att.attachmentUrl || att.imageUrl || att.fileUrl || att.url || att.path || '';
       if (fileUrl) {
-        const d = parseDate(att.date || att.timestamp || att.createdAt);
+        const d = parseDate(att.date || att.timestamp || att.createdAt, att);
         const author = att.author || att.addedBy || att.agent || 'Attachment';
         const text = att.title || att.name || att.text || att.notes || '';
 
