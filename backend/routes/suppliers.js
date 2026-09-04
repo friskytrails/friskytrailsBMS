@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Supplier = require('../models/Supplier');
 const { protect, verifiedOnly } = require('../middleware/auth');
+const crmDb = require('../config/crmDb');
 const upload = require('../middleware/multerConfig');
 
 // @route   POST /api/suppliers
@@ -77,6 +78,34 @@ router.post('/', protect, verifiedOnly, upload.array('documents', 10), async (re
 });
 
 // @route   GET /api/suppliers/search
+// @route   GET /api/suppliers/locations
+// @desc    Get countries, states, and cities from the main website database
+router.get("/locations", protect, verifiedOnly, async (req, res) => {
+  try {
+    if (crmDb.readyState !== 1) await crmDb.asPromise();
+    const databaseNames = [process.env.MAIN_DB_NAME || "FRISKYTRAILS_MAIN", "friskytrails"];
+    let locations = null;
+    for (const databaseName of databaseNames.filter((name, index, names) => names.indexOf(name) === index)) {
+      const db = crmDb.client.db(databaseName);
+      const [countries, states, cities] = await Promise.all([
+        db.collection("countries").find({}, { projection: { name: 1 } }).sort({ name: 1 }).toArray(),
+        db.collection("states").find({}, { projection: { name: 1, country: 1 } }).sort({ name: 1 }).toArray(),
+        db.collection("cities").find({}, { projection: { name: 1, country: 1, state: 1 } }).sort({ name: 1 }).toArray(),
+      ]);
+      if (countries.length || states.length || cities.length) { locations = { countries, states, cities }; break; }
+    }
+    locations = locations || { countries: [], states: [], cities: [] };
+    res.json({ success: true, data: {
+      countries: locations.countries.map(({ _id, name }) => ({ id: String(_id), name })),
+      states: locations.states.map(({ _id, name, country }) => ({ id: String(_id), name, country: String(country) })),
+      cities: locations.cities.map(({ _id, name, country, state }) => ({ id: String(_id), name, country: String(country), state: String(state) })),
+    }});
+  } catch (error) {
+    console.error("Error fetching website locations:", error);
+    res.status(500).json({ success: false, message: "Server error while fetching locations" });
+  }
+});
+
 // @desc    Advanced search for suppliers
 // @access  Protected (verified employees & admins)
 router.get('/search', protect, verifiedOnly, async (req, res) => {

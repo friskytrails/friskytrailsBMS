@@ -17,6 +17,12 @@ import {
   FileText
 } from 'lucide-react';
 
+const BOOKING_STATUSES = [
+  'Confirmed',
+  'Cancelled',
+  'Pending',
+];
+
 const SearchDashboard = () => {
   const { token, user } = useAuth();
 
@@ -32,6 +38,7 @@ const SearchDashboard = () => {
     startDate: '',
     endDate: '',
     location: '',
+    status: 'Confirmed',
   });
 
   const [showAllFilters, setShowAllFilters] = useState(false);
@@ -88,6 +95,7 @@ const SearchDashboard = () => {
       startDate: '',
       endDate: '',
       location: '',
+      status: 'Confirmed',
     });
     setBookings([]);
     setSearched(false);
@@ -176,6 +184,21 @@ const SearchDashboard = () => {
                 className="w-full pl-3 pr-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none transition-colors font-mono"
               />
             </div>
+          </div>
+
+          {/* Booking Status */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Status</label>
+            <select
+              name="status"
+              value={filters.status}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 focus:outline-none transition-colors"
+            >
+              {BOOKING_STATUSES.map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
           </div>
 
           {/* Booking Date Start */}
@@ -498,35 +521,34 @@ const SearchDashboard = () => {
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap">
                       <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${booking.status === 'Confirmed'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : booking.status === 'Cancelled'
-                            ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            : booking.status === 'On Hold'
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                              : booking.status === 'Partial Payment'
-                                ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
-                                : booking.status === 'Payment Done'
-                                  ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
-                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : booking.status === 'Cancelled'
+                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          : booking.status === 'On Hold'
+                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                            : booking.status === 'Partial Payment'
+                              ? 'bg-[rgba(243,156,18,0.1)] text-[#F39C12] border-[rgba(243,156,18,0.2)]'
+                              : booking.status === 'Payment Done'
+                                ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                         }`}>
                         {booking.status || 'Pending'}
                       </span>
                     </td>
                     <td className="px-2.5 py-3 whitespace-nowrap">
-                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${
-                          booking.tripStatus === 'Fulfillment Done'
-                            ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
-                            : booking.tripStatus === 'Trip Completed'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : booking.tripStatus === 'Postponed'
-                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
-                                : ['Cash Refund', 'Wallet Refund', 'Cancelled'].includes(booking.tripStatus)
-                                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                  : ['Cash Refund Done', 'Wallet Refund Done'].includes(booking.tripStatus)
-                                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                    : booking.tripStatus === 'No Refund'
-                                      ? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full border ${booking.tripStatus === 'Fulfillment Done'
+                          ? 'bg-[#00A89E]/10 text-[#00A89E] border-[#00A89E]/20'
+                          : booking.tripStatus === 'Trip Completed'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : booking.tripStatus === 'Postponed'
+                              ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              : ['Cash Refund', 'Wallet Refund', 'Cancelled'].includes(booking.tripStatus)
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : ['Cash Refund Done', 'Wallet Refund Done'].includes(booking.tripStatus)
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                  : booking.tripStatus === 'No Refund'
+                                    ? 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                         }`}>
                         {booking.tripStatus || 'Pending'}
                       </span>

@@ -1493,6 +1493,22 @@ const BookingDetails = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Booking Creator Section */}
+                <div className="pt-4 border-t border-slate-800 space-y-2">
+                  <label className="text-xs md:text-sm font-extrabold text-slate-400 uppercase tracking-wider block">Booking Created By</label>
+                  <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+                      <User className="w-4 h-4 text-indigo-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-100">{booking.createdBy?.name || "Unknown"}</p>
+                      {booking.createdBy?.email && (
+                        <p className="text-xs text-slate-500">{booking.createdBy.email}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Column 2: Service Date & Feedback Card */}

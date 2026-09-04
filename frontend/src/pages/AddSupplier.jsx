@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, Mail, Phone, MapPin, Building2, Upload, AlertCircle, FileText, Landmark, X, CheckCircle2, Truck } from 'lucide-react';
@@ -40,6 +40,24 @@ const AddSupplier = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [touched, setTouched] = useState({});
+  const [locations, setLocations] = useState({ countries: [], states: [], cities: [] });
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/suppliers/locations`, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || "Failed to load locations");
+        setLocations(data.data);
+      } catch (err) {
+        console.error("Error fetching locations:", err);
+        setError("Unable to load website locations. Please try again.");
+      } finally {
+        setLocationsLoading(false);
+      }
+    };
+    fetchLocations();
+  }, [token]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
 
   const validate = () => {
     const e = {};
@@ -69,6 +87,12 @@ const AddSupplier = () => {
     }
     setTouched(p => ({ ...p, [name]: true }));
     if (error) setError('');
+  };
+  const handleLocationChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(p => ({ ...p, [name]: value, ...(name === "country" ? { state: "", city: "" } : {}), ...(name === "state" ? { city: "" } : {}) }));
+    setTouched(p => ({ ...p, [name]: true }));
+    if (error) setError("");
   };
 
   const handleBlur = (name) => setTouched(p => ({ ...p, [name]: true }));
@@ -170,9 +194,30 @@ const AddSupplier = () => {
               <MapPin className="w-5 h-5 text-[#00A89E]" /><span>Location Information</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>{renderField('Country', 'country', MapPin, 'India', true)}</div>
-              <div>{renderField('State', 'state', MapPin, 'Rajasthan', true)}</div>
-              <div>{renderField('City', 'city', MapPin, 'Jaipur', true)}</div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Country <span className="text-rose-400">*</span></label>
+                <select name="country" value={formData.country} onChange={handleLocationChange} onBlur={() => handleBlur("country")} disabled={locationsLoading} className={getInputCls("country", false)}>
+                  <option value="">{locationsLoading ? "Loading countries..." : "Select country"}</option>
+                  {locations.countries.map(country => <option key={country.id} value={country.name}>{country.name}</option>)}
+                </select>
+                <ErrMsg touched={touched} errors={errors} name="country" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">State <span className="text-rose-400">*</span></label>
+                <select name="state" value={formData.state} onChange={handleLocationChange} onBlur={() => handleBlur("state")} disabled={locationsLoading || !formData.country} className={getInputCls("state", false)}>
+                  <option value="">Select state</option>
+                  {locations.states.filter(state => state.country === locations.countries.find(country => country.name === formData.country)?.id).map(state => <option key={state.id} value={state.name}>{state.name}</option>)}
+                </select>
+                <ErrMsg touched={touched} errors={errors} name="state" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">City <span className="text-rose-400">*</span></label>
+                <select name="city" value={formData.city} onChange={handleLocationChange} onBlur={() => handleBlur("city")} disabled={locationsLoading || !formData.state} className={getInputCls("city", false)}>
+                  <option value="">Select city</option>
+                  {locations.cities.filter(city => city.state === locations.states.find(state => state.name === formData.state && state.country === locations.countries.find(country => country.name === formData.country)?.id)?.id).map(city => <option key={city.id} value={city.name}>{city.name}</option>)}
+                </select>
+                <ErrMsg touched={touched} errors={errors} name="city" />
+              </div>
             </div>
           </div>
 

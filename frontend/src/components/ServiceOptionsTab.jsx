@@ -371,8 +371,8 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     }
   };
 
-  const handleCopyDetails = (service) => {
-    const paymentIdVal = generatedPaymentIds[service.serviceId];
+  const handleCopyDetails = (service, payment = null) => {
+    const paymentIdVal = payment?.paymentId || generatedPaymentIds[service.serviceId];
     if (!paymentIdVal) return;
 
     const supplierNameVal = getSupplierDisplayName(service);
@@ -685,8 +685,11 @@ Remark: ${remarkVal}`;
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <span className="text-[10px] uppercase font-bold text-purple-400">Generated IDs:</span>
                         {(service.payments || []).filter(p => p.isGenerated || (p.paymentId && p.paymentId.startsWith("GPAY-"))).map(p => (
-                          <span key={p.paymentId} className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                          <span key={p.paymentId} className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                             {p.paymentId}
+                            <button onClick={() => handleCopyDetails(service, p)} title="Copy payment details" className="text-purple-300 hover:text-white">
+                              {copiedId === p.paymentId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            </button>
                           </span>
                         ))}
                       </div>

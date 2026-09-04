@@ -1,10 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
+const User = require('../models/User');
+const crmDb = require('../config/crmDb');
+const mongoose = require('mongoose');
 const { protect, verifiedOnly, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/multerConfig');
+// Resolve creator references from either the local app users or CRM users.
+async function resolveBookingCreator(booking) {
+  const creatorId = booking.createdBy;
+  if (!creatorId || !mongoose.Types.ObjectId.isValid(String(creatorId))) {
+    booking.createdBy = null;
+    return booking;
+  }
 
-// Helper: Check if a transaction ID already exists anywhere in the database
+  const id = String(creatorId);
+  let creator = await User.findById(id).select("name email").lean();
+
+  if (!creator && crmDb.readyState === 1) {
+    creator = await crmDb.db.collection("users").findOne(
+      { $or: [{ _id: new mongoose.Types.ObjectId(id) }, { _id: id }, { userId: id }, { id }] },
+      { projection: { name: 1, fullName: 1, username: 1, email: 1, emailAddress: 1 } }
+    );
+    if (creator) {
+      creator = {
+        _id: creator._id,
+        name: creator.name || creator.fullName || creator.username,
+        email: creator.email || creator.emailAddress,
+      };
+    }
+  }
+
+  booking.createdBy = creator || null;
+  return booking;
+}
 // Searches both Booking.transactionId and all Booking.payments[].details fields
 async function isTransactionIdDuplicate(txnId, excludeBookingId = null) {
   const trimmedTxn = txnId.trim();
@@ -166,6 +195,10 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     let query = {};
     const { bookingId, paymentId, travellerName, travellerPhone, transactionId, startDate, endDate, location, status, bookingDate, bookingDateStart, bookingDateEnd } = req.query;
 
+    // The dashboard defaults to confirmed bookings. A supplied status explicitly
+    // opts into searching another booking status.
+    query.status = status ? status.trim() : 'Confirmed';
+
     if (bookingId) {
       query.bookingId = bookingId.trim();
     }
@@ -234,8 +267,6 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
         { createdBy: req.user._id },
         { status: { $ne: 'Pending' } }
       ];
-    } else if (req.user.role === 'admin' && status) {
-      query.status = status;
     }
 
     const bookings = await Booking.find(query)
@@ -643,15 +674,16 @@ router.get('/id/:id/screenshot', protect, verifiedOnly, async (req, res) => {
 router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
   try {
     const booking = await Booking.findOne({ bookingId: req.params.bookingId })
-      .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
       .populate('comments.sender', 'name email role')
-      .populate('services.supplier');
+      .populate('services.supplier')
+      .lean();
 
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    const bookingWithCreator = await resolveBookingCreator(booking);
     // Employee access control:
     // - Pending bookings: NO employee can view (must wait for payment approval)
     // - Confirmed/other statuses: shown to all employees (even if not assigned)
@@ -666,7 +698,7 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
 
     res.json({
       success: true,
-      data: booking,
+      data: bookingWithCreator,
     });
   } catch (error) {
     console.error('Get single booking error:', error);
@@ -819,7 +851,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (travellerName) booking.travellerName = travellerName;
       if (travellerEmail) booking.travellerEmail = travellerEmail;
       if (travellerPhone) booking.travellerPhone = travellerPhone;
-      
+
       if (adults !== undefined) booking.adults = Number(adults);
       if (children !== undefined) booking.children = Number(children);
       if (status) booking.status = status;
@@ -1123,7 +1155,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         let currentPaidAmount = booking.payments
           .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
-          
+
         if (booking.services && booking.services.length > 0) {
           booking.services.forEach(s => {
             if (s.payments && s.payments.length > 0) {
@@ -1158,7 +1190,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         let currentPaidAmountReject = booking.payments
           .filter(p => p.status === 'VERIFIED' && p.paymentFrom === 'TRAVELER')
           .reduce((sum, p) => sum + p.amountPaid, 0);
-          
+
         if (booking.services && booking.services.length > 0) {
           booking.services.forEach(s => {
             if (s.payments && s.payments.length > 0) {
@@ -1645,7 +1677,10 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
       return res.status(400).json({ success: false, message: 'Amount is required' });
     }
 
-    const gpayId = `${100000 + Math.floor(Math.random() * 900000)}`;
+    let gpayId;
+    do {
+      gpayId = String(100000 + Math.floor(Math.random() * 900000));
+    } while (await Booking.exists({ "services.payments.paymentId": gpayId }));
     const pFrom = paymentFrom || 'Company';
     const pTo = paymentTo || 'Supplier';
 
