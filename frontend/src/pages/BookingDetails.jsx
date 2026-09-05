@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -76,6 +76,7 @@ const BookingDetails = () => {
   // CRM Lead State
   const [leadData, setLeadData] = useState(null);
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const leadMessagesRef = useRef(null);
   const [leadLoading, setLeadLoading] = useState(false);
   const [leadError, setLeadError] = useState('');
   const [newCrmNote, setNewCrmNote] = useState('');
@@ -1173,6 +1174,16 @@ const BookingDetails = () => {
     { id: 'logs', name: 'ACTIVITY LOGS' }
   ];
 
+
+  useEffect(() => {
+    if (!isLeadModalOpen || !leadData) return;
+    const frame = requestAnimationFrame(() => {
+      const messageView = leadMessagesRef.current;
+      if (messageView) messageView.scrollTop = messageView.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isLeadModalOpen, leadData]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto animate-fadeIn font-sans space-y-8">
@@ -2269,7 +2280,7 @@ const BookingDetails = () => {
                         </div>
 
                         {/* WhatsApp Message Viewport */}
-                        <div className="p-4 max-h-[460px] min-h-[300px] overflow-y-auto space-y-3 bg-[#0b141a] custom-scrollbar">
+                        <div ref={leadMessagesRef} className="p-4 max-h-[460px] min-h-[300px] overflow-y-auto space-y-3 bg-[#0b141a] custom-scrollbar">
                           {mergedMessages.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-12 text-[#cbd5e1]">
                               <MessageSquare className="w-12 h-12 text-[#94a3b8] mb-2 opacity-90" />
