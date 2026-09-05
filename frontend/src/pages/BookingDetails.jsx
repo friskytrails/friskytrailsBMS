@@ -1097,6 +1097,17 @@ const BookingDetails = () => {
     return logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   };
 
+
+
+  useEffect(() => {
+    if (!isLeadModalOpen || !leadData) return;
+    const frame = requestAnimationFrame(() => {
+      const messageView = leadMessagesRef.current;
+      if (messageView) messageView.scrollTop = messageView.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isLeadModalOpen, leadData]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
@@ -1174,15 +1185,6 @@ const BookingDetails = () => {
     { id: 'logs', name: 'ACTIVITY LOGS' }
   ];
 
-
-  useEffect(() => {
-    if (!isLeadModalOpen || !leadData) return;
-    const frame = requestAnimationFrame(() => {
-      const messageView = leadMessagesRef.current;
-      if (messageView) messageView.scrollTop = messageView.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [isLeadModalOpen, leadData]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
