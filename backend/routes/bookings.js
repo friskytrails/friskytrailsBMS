@@ -7,9 +7,30 @@ const mongoose = require('mongoose');
 const { protect, verifiedOnly, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/multerConfig');
 const nodemailer = require('nodemailer');
+const { ImapFlow } = require('imapflow');
+const MailComposer = require('nodemailer/lib/mail-composer');
 const createMailTransporter = () => {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) throw new Error('Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
   return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
+};
+const saveToSentFolder = async (mail) => {
+  if (process.env.SAVE_SENT_COPY === 'false') return;
+  const client = new ImapFlow({
+    host: process.env.IMAP_HOST || 'imap.secureserver.net',
+    port: Number(process.env.IMAP_PORT || 993),
+    secure: process.env.IMAP_SECURE !== 'false',
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    logger: false,
+  });
+  try {
+    await client.connect();
+    const mailboxes = await client.list();
+    const sentFolder = mailboxes.find(({ path, specialUse }) => specialUse === '\\Sent' || /(^|[\/. ])sent( items?)?$/i.test(path))?.path || 'Sent';
+    const rawMessage = await new MailComposer(mail).compile().build();
+    await client.append(sentFolder, rawMessage, ['\\Seen'], new Date());
+  } finally {
+    await client.logout().catch(() => {});
+  }
 };
 // Resolve creator references from either the local app users or CRM users.
 async function resolveBookingCreator(booking) {
@@ -70,7 +91,13 @@ router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
     const {subject,body}=req.body;
     if(!subject?.trim()||!body?.trim()) return res.status(400).json({success:false,message:'Subject and email message are required'});
     if(!booking.travellerEmail) return res.status(400).json({success:false,message:'This booking has no customer email address'});
-    await createMailTransporter().sendMail({from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:body.trim().replace(/\n/g,'<br />')});
+    const mail = {from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:body.trim().replace(/\n/g,'<br />')};
+    await createMailTransporter().sendMail(mail);
+    try {
+      await saveToSentFolder(mail);
+    } catch (sentError) {
+      console.warn('Email sent, but saving a Sent copy failed:', sentError.message);
+    }
     booking.emailHistory.push({to:booking.travellerEmail,subject:subject.trim(),body:body.trim(),sentBy:req.user._id,sentByName:req.user.name,sentAt:new Date()});
     booking.comments.push({senderName:'System / '+req.user.name,message:'Booking email sent to '+booking.travellerEmail+': '+subject.trim(),timestamp:new Date()});
     await booking.save();
