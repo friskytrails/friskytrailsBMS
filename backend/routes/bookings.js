@@ -6,6 +6,11 @@ const crmDb = require('../config/crmDb');
 const mongoose = require('mongoose');
 const { protect, verifiedOnly, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/multerConfig');
+const nodemailer = require('nodemailer');
+const createMailTransporter = () => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) throw new Error('Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
+  return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
+};
 // Resolve creator references from either the local app users or CRM users.
 async function resolveBookingCreator(booking) {
   const creatorId = booking.createdBy;
@@ -54,6 +59,24 @@ async function isTransactionIdDuplicate(txnId, excludeBookingId = null) {
   const existing = await Booking.findOne(query).select('_id bookingId').lean();
   return existing;
 }
+
+router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
+  try {
+    const booking=await Booking.findById(req.params.id);
+    if(!booking) return res.status(404).json({success:false,message:'Booking not found'});
+    const isCreator=booking.createdBy && booking.createdBy.toString()===req.user._id.toString();
+    const isAssigned=booking.assignedTo?.some(id=>id.toString()===req.user._id.toString());
+    if(req.user.role!=='admin'&&!isCreator&&!isAssigned) return res.status(403).json({success:false,message:'Access denied'});
+    const {subject,body}=req.body;
+    if(!subject?.trim()||!body?.trim()) return res.status(400).json({success:false,message:'Subject and email message are required'});
+    if(!booking.travellerEmail) return res.status(400).json({success:false,message:'This booking has no customer email address'});
+    await createMailTransporter().sendMail({from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:body.trim().replace(/\n/g,'<br />')});
+    booking.emailHistory.push({to:booking.travellerEmail,subject:subject.trim(),body:body.trim(),sentBy:req.user._id,sentByName:req.user.name,sentAt:new Date()});
+    booking.comments.push({senderName:'System / '+req.user.name,message:'Booking email sent to '+booking.travellerEmail+': '+subject.trim(),timestamp:new Date()});
+    await booking.save();
+    res.json({success:true,message:'Email sent to '+booking.travellerEmail,data:booking});
+  } catch(error) { console.error('Send booking email error:',error); res.status(500).json({success:false,message:error.message||'Failed to send email'}); }
+});
 
 // @desc    Create a new booking
 // @route   POST /api/bookings

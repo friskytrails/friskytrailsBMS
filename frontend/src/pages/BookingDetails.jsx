@@ -30,6 +30,7 @@ import { API_BASE } from '../config';
 import CommentSection from '../components/CommentSection';
 import ServiceOptionsTab from '../components/ServiceOptionsTab';
 import ActivityLogSection from '../components/ActivityLogSection';
+import BookingEmailTab from '../components/BookingEmailTab';
 
 const getStatusStyles = (status) => {
   switch (status) {
@@ -1056,9 +1057,9 @@ const BookingDetails = () => {
     logs.push({
       id: 'mail-sent',
       taskName: 'Mail Confirmation Sent',
-      updatedBy: 'System / Auto',
-      timestamp: booking.updatedAt || booking.createdAt,
-      completed: hasMilestones,
+      updatedBy: booking.emailHistory?.length ? (booking.emailHistory.at(-1).sentByName || 'System') : 'System / Auto',
+      timestamp: booking.emailHistory?.length ? booking.emailHistory.at(-1).sentAt : booking.updatedAt || booking.createdAt,
+      completed: Boolean(booking.emailHistory?.length),
     });
 
     logs.push({
@@ -1168,6 +1169,7 @@ const BookingDetails = () => {
     { id: 'payments', name: 'BILLING & PAYMENTS' },
     { id: 'services', name: 'SERVICE OPTIONS' },
     { id: 'discussion', name: 'DISCUSSION' },
+    { id: 'email', name: 'EMAIL CUSTOMER' },
     { id: 'logs', name: 'ACTIVITY LOGS' }
   ];
 
@@ -2087,6 +2089,11 @@ const BookingDetails = () => {
           {activeTab === 'logs' && (
             <div className="h-full min-h-[480px]">
               <ActivityLogSection logs={getActivityLog()} />
+            </div>
+          )}
+          {activeTab === 'email' && (
+            <div className="h-full min-h-[480px]">
+              <BookingEmailTab booking={booking} token={token} onBookingUpdated={setBooking} />
             </div>
           )}
 

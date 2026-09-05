@@ -265,6 +265,14 @@ const BookingSchema = new mongoose.Schema({
     fileType: String,
     timestamp: { type: Date, default: Date.now }
   }],
+  emailHistory: [{
+    to: { type: String, required: true },
+    subject: { type: String, required: true },
+    body: { type: String, required: true },
+    sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    sentByName: { type: String, default: '' },
+    sentAt: { type: Date, default: Date.now },
+  }],
   payments: {
     type: [PaymentSchema],
     default: [],
