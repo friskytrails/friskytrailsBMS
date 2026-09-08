@@ -16,6 +16,7 @@ import BookingDetails from './pages/BookingDetails';
 import AddSupplier from './pages/AddSupplier';
 import SearchSuppliers from './pages/SearchSuppliers';
 import SupplierDetails from './pages/SupplierDetails';
+import AddTodo from './pages/AddTodo';
 
 function App() {
   return (
@@ -53,6 +54,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <CreateBooking />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/add-todo"
+                element={
+                  <ProtectedRoute>
+                    <AddTodo />
                   </ProtectedRoute>
                 }
               />

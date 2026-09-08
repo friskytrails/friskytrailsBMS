@@ -27,6 +27,7 @@ app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/lead-details', require('./routes/leads'));
 app.use('/api/suppliers', require('./routes/suppliers'));
+app.use('/api/todos', require('./routes/todos'));
 
 // Base Route
 app.get('/', (req, res) => {

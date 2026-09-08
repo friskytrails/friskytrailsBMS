@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Plus } from 'lucide-react';
+import { ClipboardPlus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SearchDashboard from '../components/SearchDashboard';
 
@@ -26,11 +26,11 @@ const Dashboard = () => {
           </div>
           {(user?.role === 'employee' || user?.role === 'admin') && (
             <Link
-              to="/create-booking"
+              to="/add-todo"
               className="mt-4 md:mt-0 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-all duration-200 shadow-lg shadow-indigo-650/10 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              <span>Create Booking</span>
+              <ClipboardPlus className="w-4 h-4" />
+              <span>Add Todo</span>
             </Link>
           )}
         </div>
