@@ -7,6 +7,8 @@ import AdminRoute from './components/AdminRoute';
 
 // Pages
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Register from './pages/Register';
 import PendingVerification from './pages/PendingVerification';
 import Dashboard from './pages/Dashboard';
@@ -29,6 +31,8 @@ function App() {
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password/:token" element={<ResetPassword />} />
 
               {/* Pending Verification Route */}
               <Route

@@ -274,7 +274,8 @@ const AdminDashboard = () => {
   const handleVerifyPayment = async (bookingObjectId, paymentId, isServicePayment, serviceId) => {
     // Check if a screenshot is required but missing
     const paymentObj = pendingPayments.find(p => p.paymentId === paymentId || p._id === paymentId);
-    if (isServicePayment && paymentObj && !paymentObj.attachment) {
+    const isCashTravellerToSupplier = paymentObj?.paymentFrom === 'Traveller' && paymentObj?.paymentTo === 'Supplier' && paymentObj?.paymentMode === 'Direct Cash';
+    if (isServicePayment && paymentObj && !paymentObj.attachment && !isCashTravellerToSupplier) {
       setScreenshotModal({
         isOpen: true,
         bookingObjectId,

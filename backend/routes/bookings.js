@@ -243,7 +243,7 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
 router.get('/search', protect, verifiedOnly, async (req, res) => {
   try {
     let query = {};
-    const { bookingId, paymentId, travellerName, travellerPhone, transactionId, startDate, endDate, location, status, bookingDate, bookingDateStart, bookingDateEnd } = req.query;
+    const { bookingId, paymentId, travellerName, travellerPhone, transactionId, createdBy, startDate, endDate, location, status, bookingDate, bookingDateStart, bookingDateEnd } = req.query;
 
     // The dashboard defaults to confirmed bookings. A supplied status explicitly
     // opts into searching another booking status.
@@ -263,6 +263,13 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     }
     if (transactionId) {
       query.transactionId = transactionId.trim();
+    }
+    if (createdBy) {
+      const creatorId = createdBy.trim();
+      if (!mongoose.Types.ObjectId.isValid(creatorId)) {
+        return res.status(400).json({ success: false, message: 'Invalid booking creator' });
+      }
+      query.createdBy = creatorId;
     }
     if (location) {
       query.location = { $regex: location.trim(), $options: 'i' };
@@ -639,7 +646,7 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot change a Confirmed booking back to Pending.' });
     }
 
-    const bookingStatuses = ['Pending', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'];
+    const bookingStatuses = ['Confirmed', 'Cancelled', 'Pending'];
     const tripStatuses = ['Pending', 'Under Process', 'Fulfillment Done', 'Trip Completed', 'Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'];
 
     if (status && !bookingStatuses.includes(status)) {
@@ -1345,14 +1352,15 @@ router.patch('/:id/toggle-task', protect, verifiedOnly, async (req, res) => {
     await booking.save();
 
     const updatedBooking = await Booking.findById(booking._id)
-      .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .lean();
+    const bookingWithCreator = await resolveBookingCreator(updatedBooking);
 
     res.json({
       success: true,
       message: 'Task toggled successfully',
-      data: updatedBooking,
+      data: bookingWithCreator,
     });
   } catch (error) {
     console.error('Toggle task error:', error);
@@ -1662,9 +1670,10 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
 
     const { status, reason } = req.body;
+    const isCashTravellerToSupplier = payment.paymentFrom === 'Traveller' && payment.paymentTo === 'Supplier' && payment.paymentMode === 'Direct Cash';
 
     if (status === 'VERIFIED') {
-      if (!payment.screenshot && !req.file) {
+      if (!isCashTravellerToSupplier && !payment.screenshot && !req.file) {
         return res.status(400).json({ success: false, message: 'Screenshot is mandatory for verifying this payment' });
       }
       if (req.file) {

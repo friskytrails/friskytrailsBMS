@@ -766,9 +766,9 @@ const CreateBooking = ({ isEdit }) => {
                     onBlur={() => handleBlur('status')}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-2 focus:ring-[#00A89E]/50 rounded-xl text-sm text-slate-200 focus:outline-none transition-colors cursor-pointer"
                   >
+                    <option value="Confirmed">Confirmed</option>
                     <option value="Pending">Pending</option>
                     <option value="Cancelled">Cancelled</option>
-                    <option value="On Hold">On Hold</option>
                   </select>
                   {touched.status && validationErrors.status && (
                     <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">

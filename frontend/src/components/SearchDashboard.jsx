@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE } from '../config';
@@ -38,9 +38,11 @@ const SearchDashboard = () => {
     startDate: '',
     endDate: '',
     location: '',
+    createdBy: '',
     status: 'Confirmed',
   });
 
+  const [creatorOptions, setCreatorOptions] = useState([]);
   const [showAllFilters, setShowAllFilters] = useState(false);
 
   // UI state
@@ -50,6 +52,22 @@ const SearchDashboard = () => {
   const [error, setError] = useState('');
   const [selectedScreenshot, setSelectedScreenshot] = useState(null);
   const [fetchingScreenshotId, setFetchingScreenshotId] = useState(null);
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    const fetchCreatorOptions = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) setCreatorOptions(data.data);
+      } catch (err) {
+        console.error('Error fetching booking creators:', err);
+      }
+    };
+    fetchCreatorOptions();
+  }, [token, user?.role]);
 
   const handleViewScreenshot = async (bookingId, bookingObjectId) => {
     setFetchingScreenshotId(bookingObjectId);
@@ -95,6 +113,7 @@ const SearchDashboard = () => {
       startDate: '',
       endDate: '',
       location: '',
+      createdBy: '',
       status: 'Confirmed',
     });
     setBookings([]);
@@ -200,6 +219,26 @@ const SearchDashboard = () => {
               ))}
             </select>
           </div>
+
+          {/* Booking Created By */}
+          {user?.role === 'admin' && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Booking Created By</label>
+              <select
+                name="createdBy"
+                value={filters.createdBy}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 focus:outline-none transition-colors"
+              >
+                <option value="">All Creators</option>
+                {creatorOptions.map((creator) => (
+                  <option key={creator._id} value={creator._id}>
+                    {creator.name || creator.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Booking Date Start */}
           <div className="space-y-1">

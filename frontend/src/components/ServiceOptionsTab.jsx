@@ -6,6 +6,8 @@ import {
   Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye, Copy
 } from 'lucide-react';
 
+const isCashTravellerToSupplier = (payment) => payment?.paymentFrom === 'Traveller' && payment?.paymentTo === 'Supplier' && payment?.paymentMode === 'Direct Cash';
+
 const getSupplierDisplayName = (service) => {
   if (service?.supplier && typeof service.supplier === 'object') {
     return service.supplier.businessName || service.supplier.fullName || service.supplierName || service.outsourceName || 'Unknown Supplier';
@@ -229,7 +231,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     const service = (booking.services || []).find(s => s.serviceId === serviceId);
     const payment = service ? (service.payments || []).find(p => p.paymentId === paymentId) : null;
 
-    if (status === 'VERIFIED' && payment && !payment.screenshot) {
+    if (status === 'VERIFIED' && payment && !payment.screenshot && !isCashTravellerToSupplier(payment)) {
       setVerificationModal({
         isOpen: true,
         serviceId,

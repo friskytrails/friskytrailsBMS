@@ -1222,7 +1222,7 @@ const BookingDetails = () => {
                         <option value="Pending" className="bg-slate-900 text-amber-500">Pending</option>
                       )}
                       <option value="Confirmed" className="bg-slate-900 text-emerald-500">Confirmed</option>
-                      <option value="Cancelled" className="bg-slate-900 text-rose-500">Reject</option>
+                      <option value="Cancelled" className="bg-slate-900 text-rose-500">Cancelled</option>
                     </select>
                     {updatingStatus && (
                       <span className="ml-2 w-4 h-4 border-2 border-[#00A89E] border-t-transparent rounded-full animate-spin"></span>

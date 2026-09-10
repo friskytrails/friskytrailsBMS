@@ -229,9 +229,7 @@ const BookingSchema = new mongoose.Schema({
   status: {
     type: String,
     required: [true, 'Booking status is required'],
-    enum: [
-      'Pending', 'Cancelled', 'On Hold', 'Confirmed', 'Partial Payment', 'Payment Done'
-    ],
+    enum: ['Confirmed', 'Cancelled', 'Pending'],
     default: 'Pending',
   },
   tripStatus: {
