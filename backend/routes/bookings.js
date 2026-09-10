@@ -488,7 +488,10 @@ router.get('/generated-payment-ids', protect, adminOnly, async (req, res) => {
         booking.services.forEach(service => {
           if (service.payments && service.payments.length > 0) {
             service.payments.forEach(payment => {
-              if (payment.isGenerated || (payment.paymentId && payment.paymentId.startsWith('GPAY-'))) {
+              if (
+                payment.status === 'VERIFICATION-REQUIRED' &&
+                (payment.isGenerated || (payment.paymentId && payment.paymentId.startsWith('GPAY-')))
+              ) {
                 generatedIds.push({
                   bookingObjectId: booking._id,
                   bookingId: booking.bookingId,

@@ -304,6 +304,8 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
+        fetchPendingPayments();
+        fetchGeneratedIds();
         // If booking was auto-confirmed (first payment verified on a Pending booking),
         // remove it from pending bookings list as well
         if (!isServicePayment && data.autoConfirmed) {
@@ -382,6 +384,8 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== paymentId && p._id !== paymentId));
+        fetchPendingPayments();
+        fetchGeneratedIds();
         setSuccessModal({ isOpen: true, message: 'Payment rejected successfully!' });
       } else {
         alert(data.message || 'Failed to reject payment');
