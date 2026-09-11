@@ -124,7 +124,7 @@ router.post('/forgot-password', async (req, res) => {
     user.resetPasswordToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
-    const base = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const base = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'https://friskytrails-bms.vercel.app').replace(/\/$/, '');
     const resetUrl = base + '/reset-password/' + rawToken;
     await createMailTransporter().sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: user.email, subject: 'Reset your FriskyTrails BMS password', text: 'Reset link (expires in 15 minutes): ' + resetUrl, html: '<p>Hello ' + (user.name || 'there') + ',</p><p><a href="' + resetUrl + '">Reset your password</a></p><p>This link expires in 15 minutes.</p>' });
     res.json(generic);
