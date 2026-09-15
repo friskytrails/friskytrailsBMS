@@ -441,7 +441,8 @@ const AdminDashboard = () => {
 
     const copyText = `Payment ID: ${paymentIdVal}
 Supplier Name: ${supplierNameVal}
-Service Date: ${serviceDateVal}
+Customer Name: ${p.travellerName || 'N/A'}
+Travel Date: ${serviceDateVal}
 Account Details:
 ${accountDetailsVal}
 Amount to Pay: ${amountToPayVal}
@@ -1009,6 +1010,7 @@ Remark: ${remarkVal}`;
                                 <span className="font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
                                   {p.paymentId}
                                 </span>
+                                {p.status !== 'VERIFIED' && (
                                 <button
                                   onClick={() => handleCopyDetails(p)}
                                   className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
@@ -1016,6 +1018,7 @@ Remark: ${remarkVal}`;
                                 >
                                   {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                                 </button>
+                                )}
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">

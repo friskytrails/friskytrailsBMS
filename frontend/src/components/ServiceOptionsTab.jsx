@@ -15,6 +15,23 @@ const getSupplierDisplayName = (service) => {
   return service?.supplierName || service?.outsourceName || 'Unknown Supplier';
 };
 
+const formatServiceDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const day = date.getDate();
+  const suffix = day % 10 === 1 && day % 100 !== 11 ? "st" : day % 10 === 2 && day % 100 !== 12 ? "nd" : day % 10 === 3 && day % 100 !== 13 ? "rd" : "th";
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"][date.getMonth()];
+  return `${day}${suffix} ${month}`;
+};
+
+const getServiceDateRange = (service) => {
+  const start = formatServiceDate(service?.startDate);
+  const end = formatServiceDate(service?.endDate);
+  if (start && end) return `${start} to ${end}`;
+  return start || end || null;
+};
+
 const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   const [services, setServices] = useState(booking.services || []);
   const [isAdding, setIsAdding] = useState(false);
@@ -196,6 +213,11 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     }
   };
 
+  const handleDeleteService = async (service) => {
+    if (!window.confirm("Delete " + getSupplierDisplayName(service) + "? It will appear under Deleted Services.")) return;
+    await updateServiceStatus(service.serviceId, "Cancelled No Charges");
+  };
+
   const handlePaymentSubmit = async (serviceId, paymentData, file) => {
     try {
       const formDataObj = new FormData();
@@ -260,6 +282,13 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     } catch (err) {
       alert('Error verifying payment');
     }
+  };
+
+  const handlePasteVerificationImage = (event) => {
+    const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith("image/"));
+    if (!imageItem) return;
+    event.preventDefault();
+    setVerificationModal(prev => ({ ...prev, file: imageItem.getAsFile() }));
   };
 
   const submitVerifyWithScreenshot = async () => {
@@ -404,7 +433,8 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
 
     const copyText = `Payment ID: ${paymentIdVal}
 Supplier Name: ${supplierNameVal}
-Service Date: ${serviceDateVal}
+Customer Name: ${booking.travellerName || 'N/A'}
+Travel Date: ${serviceDateVal}
 Account Details:
 ${accountDetailsVal}
 Amount to Pay: ${amountToPayVal}
@@ -414,6 +444,9 @@ Remark: ${remarkVal}`;
     setCopiedId(paymentIdVal);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const activeServices = services.filter(service => service.serviceStatus !== "Cancelled No Charges");
+  const deletedServices = services.filter(service => service.serviceStatus === "Cancelled No Charges");
 
   return (
     <div className="space-y-6">
@@ -635,14 +668,14 @@ Remark: ${remarkVal}`;
 
       {/* Services List */}
       <div className="space-y-4">
-        {services.length === 0 ? (
+        {activeServices.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
             <FileText className="w-12 h-12 text-slate-600 mx-auto mb-3" />
             <h3 className="text-slate-300 font-bold mb-1">No Services Added</h3>
             <p className="text-sm text-slate-500">Add hotels, transport, and other services to manage bookings.</p>
           </div>
         ) : (
-          services.map(service => (
+          activeServices.map(service => (
             <div key={service.serviceId} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
               {/* Header */}
               <div 
@@ -666,6 +699,7 @@ Remark: ${remarkVal}`;
                       <span className="text-[10px] text-slate-500 font-mono px-2 py-0.5 bg-slate-950 rounded-full border border-slate-800">
                         {service.serviceId}
                       </span>
+                      {getServiceDateRange(service) && <span className="text-xs font-medium text-slate-500">{getServiceDateRange(service)}</span>}
                     </div>
                     <h3 className="text-lg font-bold text-slate-100 mt-1 flex items-center gap-2 flex-wrap">
                       <span>{getSupplierDisplayName(service)}</span>
@@ -689,9 +723,11 @@ Remark: ${remarkVal}`;
                         {(service.payments || []).filter(p => p.isGenerated || (p.paymentId && p.paymentId.startsWith("GPAY-"))).map(p => (
                           <span key={p.paymentId} className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
                             {p.paymentId}
+                            {p.status !== 'VERIFIED' && (
                             <button onClick={() => handleCopyDetails(service, p)} title="Copy payment details" className="text-purple-300 hover:text-white">
                               {copiedId === p.paymentId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                             </button>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -732,13 +768,19 @@ Remark: ${remarkVal}`;
                         <option value="Cancelled No Charges">Cancelled No Charges</option>
                       </select>
                     </div>
+                    <button
+                      onClick={() => handleDeleteService(service)}
+                      className="flex items-center gap-1.5 text-xs bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors"
+                      >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete Service
+                    </button>
                     {editingServiceId !== service.serviceId && (
                       <button
                         onClick={() => startEditService(service)}
                         className="flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-bold transition-colors"
                       >
                         <Edit className="w-3.5 h-3.5" /> Edit Service
-                      </button>
+                    </button>
                     )}
                   </div>
 
@@ -1053,6 +1095,24 @@ Remark: ${remarkVal}`;
         )}
       </div>
 
+      {deletedServices.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-rose-400">Deleted Services</h3>
+          {deletedServices.map(service => (
+            <div key={service.serviceId} className="bg-slate-900/60 border border-rose-500/20 rounded-xl p-4 flex items-center justify-between gap-4 opacity-80">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">{service.supplierType}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">{service.serviceId}</span>
+                </div>
+                <p className="text-sm font-semibold text-slate-300 mt-1">{getSupplierDisplayName(service)}</p>
+              </div>
+              <span className="text-xs font-bold text-rose-400">Deleted</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Screenshot Viewer Modal */}
       {viewingScreenshot && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -1075,9 +1135,9 @@ Remark: ${remarkVal}`;
           <div className="bg-slate-900 border border-slate-800 max-w-md w-full rounded-2xl overflow-hidden shadow-2xl p-6 animate-scaleUp">
             <h3 className="text-lg font-bold text-slate-100 mb-2">Upload Payment Screenshot</h3>
             <p className="text-slate-400 text-xs mb-4 leading-relaxed">
-              This payment request requires a screenshot upload to be verified.
+              This payment request requires a screenshot. Upload a file or focus this window and paste an image.
             </p>
-            <div className="space-y-4">
+            <div className="space-y-4" onPaste={handlePasteVerificationImage} tabIndex={0}>
               <input
                 type="file"
                 accept="image/*,application/pdf"
@@ -1121,6 +1181,13 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handlePasteImage = (event) => {
+    const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith("image/"));
+    if (!imageItem) return;
+    event.preventDefault();
+    setFile(imageItem.getAsFile());
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -1138,7 +1205,7 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
           <h3 className="text-lg font-bold text-slate-100">Add Payment - {service.supplierType}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5"/></button>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} onPaste={handlePasteImage} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Amount (₹) *</label>
@@ -1176,7 +1243,7 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
           </div>
           {data.paymentMode === 'Account' && (
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Screenshot *</label>
+              <label className="text-xs text-slate-400 mb-1 block">Screenshot * (upload or paste)</label>
               <input required type="file" onChange={e => setFile(e.target.files[0])} className="w-full text-xs text-slate-400 file:mr-3 file:py-1 file:px-2 file:rounded file:border file:border-slate-800 file:bg-slate-950 file:text-slate-300"/>
             </div>
           )}
