@@ -9,6 +9,7 @@ const upload = require('../middleware/multerConfig');
 const nodemailer = require('nodemailer');
 const { ImapFlow } = require('imapflow');
 const MailComposer = require('nodemailer/lib/mail-composer');
+const { recalculateSupplierPaidAmounts } = require('../utils/supplierPayments');
 const createMailTransporter = () => {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) throw new Error('Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
   return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
@@ -1521,6 +1522,8 @@ router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) =
 
     await booking.save();
 
+    await recalculateSupplierPaidAmounts();
+
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
@@ -1701,6 +1704,8 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     }
 
     await booking.save();
+
+    await recalculateSupplierPaidAmounts([service.supplier]);
 
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')

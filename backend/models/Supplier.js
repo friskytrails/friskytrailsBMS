@@ -99,6 +99,14 @@ const SupplierSchema = new mongoose.Schema({
     default: '',
   },
 
+  // Denormalized total of verified Company -> Supplier service payments.
+  // The source of truth remains Booking.services[].payments[].paidAmount.
+  totalAmountPaid: {
+    type: Number,
+    min: 0,
+    default: 0,
+  },
+
   // Supplier Categories
   supplierFor: {
     type: [String],

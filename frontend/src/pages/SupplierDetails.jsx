@@ -355,6 +355,11 @@ const SupplierDetails = () => {
               <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Financial Details</h3>
             </div>
             <div className="space-y-4">
+              <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5">
+                <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Total Amount Paid</div>
+                <div className="text-lg font-bold text-emerald-400 font-mono mt-1">₹{Number(supplier.totalAmountPaid || 0).toLocaleString("en-IN")}</div>
+                <div className="text-[10px] text-slate-500 mt-1">Verified company-to-supplier payments</div>
+              </div>
               <EditableField icon={FileText} label="GSTIN" field="gstin" mono />
               <EditableField icon={FileText} label="MSME" field="msme" mono />
               <EditableField icon={Building2} label="Bank Name" field="bankName" />
