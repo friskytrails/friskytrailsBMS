@@ -75,7 +75,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
 
   // Generate Payment ID state
   const [generatePayIdModals, setGeneratePayIdModals] = useState({});
-  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
+  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' });
   const [generatePayIdLoading, setGeneratePayIdLoading] = useState(false);
   const [generatedPaymentIds, setGeneratedPaymentIds] = useState({});
   const [copiedId, setCopiedId] = useState(null);
@@ -377,6 +377,9 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     if (!generatePayIdData.amount || Number(generatePayIdData.amount) <= 0) {
       return alert('Please enter a valid amount');
     }
+    if (generatePayIdData.paymentMode === 'Account' && !generatePayIdData.accountSubMode) {
+      return alert('Please select the bank account');
+    }
     setGeneratePayIdLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${serviceId}/generate-payment-id`, {
@@ -391,7 +394,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       if (data.success) {
         onServiceUpdated(data.data);
         setGeneratedPaymentIds({ ...generatedPaymentIds, [serviceId]: data.paymentId });
-        setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
+        setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' });
       } else {
         alert(data.message || 'Error generating payment ID');
       }
@@ -943,7 +946,7 @@ Remark: ${remarkVal}`;
                       <h4 className="text-sm font-bold text-slate-200">Service Payments</h4>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => { setGeneratePayIdData({ amount: '', details: '' }); setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: true }); }}
+                          onClick={() => { setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' }); setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: true }); }}
                           className="flex items-center gap-1 text-xs bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors"
                         >
                           <Send className="w-3.5 h-3.5" /> Generate Payment ID
@@ -996,7 +999,7 @@ Remark: ${remarkVal}`;
                           </div>
                         ) : (
                           <>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">From</label>
                                 <select value={generatePayIdData.paymentFrom} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentFrom: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
@@ -1014,6 +1017,25 @@ Remark: ${remarkVal}`;
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">Amount (₹) *</label>
                                 <input type="number" value={generatePayIdData.amount} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, amount: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Enter amount" />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">Payment Mode</label>
+                                <select value={generatePayIdData.paymentMode} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentMode: e.target.value, accountSubMode: e.target.value === 'Direct Cash' ? '' : generatePayIdData.accountSubMode })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
+                                  <option value="Account">Account</option>
+                                  <option value="Direct Cash">Direct Cash</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-slate-500 mb-1">Bank Account</label>
+                                <select disabled={generatePayIdData.paymentMode !== 'Account'} value={generatePayIdData.accountSubMode} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, accountSubMode: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 disabled:opacity-50">
+                                  <option value="">Select bank</option>
+                                  <option value="Kalpana BOI">Kalpana BOI</option>
+                                  <option value="Kalpana PNB">Kalpana PNB</option>
+                                  <option value="Babita AU">Babita AU</option>
+                                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                                  <option value="FT HDFC">FT HDFC</option>
+                                  <option value="Pratyush SBI">Pratyush SBI</option>
+                                </select>
                               </div>
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">Details/Remarks</label>
@@ -1041,7 +1063,7 @@ Remark: ${remarkVal}`;
                               <div className="flex items-center gap-3 flex-wrap">
                                 <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">{p.paymentId}</span>
                                 <div className="text-sm font-bold text-slate-200">₹{p.paidAmount?.toLocaleString()}</div>
-                                <div className="text-[10px] text-slate-500">{new Date(p.paymentDate).toLocaleDateString()} via {p.paymentMode}</div>
+                                <div className="text-[10px] text-slate-500">{new Date(p.paymentDate).toLocaleDateString()} via {p.paymentMode} {p.accountSubMode && <>({p.accountSubMode})</>}</div>
                                 <div className="text-xs px-2 py-0.5 bg-slate-900 rounded border border-slate-700 text-slate-400">
                                   {p.paymentFrom} → {p.paymentTo}
                                 </div>
@@ -1236,11 +1258,25 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
           </div>
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Payment Mode</label>
-            <select value={data.paymentMode} onChange={e => setData({...data, paymentMode: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
+            <select value={data.paymentMode} onChange={e => setData({...data, paymentMode: e.target.value, accountSubMode: e.target.value === 'Direct Cash' ? '' : data.accountSubMode})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
               <option value="Account">Account</option>
               <option value="Direct Cash">Direct Cash</option>
             </select>
           </div>
+          {data.paymentMode === 'Account' && (
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Bank Account *</label>
+              <select required value={data.accountSubMode} onChange={e => setData({...data, accountSubMode: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
+                <option value="">Select bank account</option>
+                <option value="Kalpana BOI">Kalpana BOI</option>
+                <option value="Kalpana PNB">Kalpana PNB</option>
+                <option value="Babita AU">Babita AU</option>
+                <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                <option value="FT HDFC">FT HDFC</option>
+                <option value="Pratyush SBI">Pratyush SBI</option>
+              </select>
+            </div>
+          )}
           {data.paymentMode === 'Account' && (
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Screenshot * (upload or paste)</label>

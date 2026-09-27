@@ -1768,7 +1768,7 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
     const service = booking.services.find(s => s.serviceId === req.params.serviceId);
     if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
 
-    const { amount, details, paymentFrom, paymentTo } = req.body;
+    const { amount, details, paymentFrom, paymentTo, paymentMode, accountSubMode } = req.body;
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json({ success: false, message: 'Amount is required' });
     }
@@ -1786,8 +1786,8 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
       paymentFrom: pFrom,
       paymentTo: pTo,
       paidAmount: Number(amount),
-      paymentMode: 'Account',
-      accountSubMode: '',
+      paymentMode: paymentMode || 'Account',
+      accountSubMode: accountSubMode || '',
       screenshot: '',
       screenshotName: '',
       status: 'VERIFICATION-REQUIRED',
