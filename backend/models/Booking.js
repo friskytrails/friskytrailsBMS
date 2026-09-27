@@ -19,9 +19,12 @@ const PaymentSchema = new mongoose.Schema({
   paymentTo: {
     type: String,
     required: true,
-    enum: ['TRAVELER', 'COMPANY'],
+    enum: ['TRAVELER', 'COMPANY', 'SUPPLIER'],
     default: 'COMPANY',
   },
+  supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
+  supplierName: { type: String, trim: true, default: '' },
+  supplierSupplierId: { type: String, trim: true, default: '' },
   amountPaid: {
     type: Number,
     required: true,

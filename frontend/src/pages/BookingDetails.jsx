@@ -115,6 +115,9 @@ const BookingDetails = () => {
   const [formPaymentDate, setFormPaymentDate] = useState('');
   const [formPaymentFrom, setFormPaymentFrom] = useState('TRAVELER');
   const [formPaymentTo, setFormPaymentTo] = useState('COMPANY');
+  const [formSupplierId, setFormSupplierId] = useState('');
+  const [suppliers, setSuppliers] = useState([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [formDetails, setFormDetails] = useState('');
   const [formAttachment, setFormAttachment] = useState(null);
   const [formAttachmentName, setFormAttachmentName] = useState('');
@@ -751,13 +754,28 @@ const BookingDetails = () => {
 
 
   // --- Payment Form Submit Handlers ---
+  const loadSuppliers = async () => {
+    setLoadingSuppliers(true);
+    try {
+      const res = await fetch(API_BASE + '/api/suppliers', { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      if (data.success) setSuppliers(data.data || []);
+    } catch (err) {
+      console.error('Error fetching suppliers:', err);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
   const openAddPaymentModal = () => {
+    loadSuppliers();
     setEditingPayment(null);
     setFormAmountPaid('');
     setFormPaymentMode('Kalpana BOI');
     setFormPaymentDate(new Date().toISOString().split('T')[0]);
     setFormPaymentFrom('TRAVELER');
     setFormPaymentTo('COMPANY');
+    setFormSupplierId('');
     setFormDetails('');
     setFormAttachment(null);
     setFormAttachmentName('');
@@ -773,6 +791,8 @@ const BookingDetails = () => {
     setFormPaymentDate(payment.paymentDate ? new Date(payment.paymentDate).toISOString().split('T')[0] : '');
     setFormPaymentFrom(payment.paymentFrom);
     setFormPaymentTo(payment.paymentTo);
+    setFormSupplierId(payment.supplier?._id || payment.supplier || '');
+    loadSuppliers();
     setFormDetails(payment.details || '');
     setFormAttachment(null);
     setFormAttachmentName(payment.attachmentName || '');
@@ -805,6 +825,11 @@ const BookingDetails = () => {
       return;
     }
 
+    if (formPaymentTo === 'SUPPLIER' && !formSupplierId) {
+      setFormError('Please select a supplier');
+      return;
+    }
+
     setSubmittingPayment(true);
 
     try {
@@ -816,6 +841,7 @@ const BookingDetails = () => {
       formData.append('paymentDate', formPaymentDate);
       formData.append('paymentFrom', formPaymentFrom);
       formData.append('paymentTo', formPaymentTo);
+      if (formPaymentTo === 'SUPPLIER') formData.append('supplierId', formSupplierId);
       formData.append('paymentMode', formPaymentMode);
       formData.append('attachmentName', formAttachmentName);
       formData.append('status', formStatus);
@@ -1850,7 +1876,7 @@ const BookingDetails = () => {
                           <tr key={p._id || p.paymentId} className="text-xs text-slate-300 hover:bg-slate-900/40 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-400">{p.paymentId}</td>
                             <td className="py-3.5 px-3 font-semibold">{formatDate(p.paymentDate)}</td>
-                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom} to {p.paymentTo}</td>
+                            <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom} to {p.paymentTo}{p.paymentTo === 'SUPPLIER' && (p.supplierName || p.supplier?.businessName || p.supplier?.fullName) && (<span className="block text-[10px] text-indigo-400 mt-0.5">{p.supplierName || p.supplier?.businessName || p.supplier?.fullName}</span>)}</td>
                             <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{p.amountPaid.toLocaleString()}</td>
                             <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{p.paymentMode}</td>
                             <td className="py-3.5 px-3">
@@ -2491,8 +2517,24 @@ const BookingDetails = () => {
                 >
                   <option value="COMPANY">COMPANY</option>
                   <option value="TRAVELER">TRAVELER</option>
+                  <option value="SUPPLIER">SUPPLIER</option>
                 </select>
               </div>
+
+              {formPaymentTo === 'SUPPLIER' && (
+                <div className="relative">
+                  <label className="absolute -top-2 left-2.5 bg-slate-900 px-1 text-[10px] text-slate-550 font-semibold">Supplier *</label>
+                  <div className="flex gap-2">
+                    <select required value={formSupplierId} onChange={(e) => setFormSupplierId(e.target.value)} className="min-w-0 flex-1 bg-slate-950 border border-slate-800 rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none">
+                      <option value="">{loadingSuppliers ? 'Loading suppliers...' : 'Select supplier'}</option>
+                      {suppliers.map((supplier) => (
+                        <option key={supplier._id} value={supplier._id}>{supplier.businessName || supplier.fullName} ({supplier.supplierId})</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => navigate('/add-supplier')} className="shrink-0 px-3 py-2 bg-[#00A89E] text-white text-[10px] font-bold uppercase rounded">Add Supplier</button>
+                  </div>
+                </div>
+              )}
 
               {/* Transaction Details (with character counter) * */}
               <div>

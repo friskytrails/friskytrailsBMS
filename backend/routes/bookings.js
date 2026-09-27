@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
+const Supplier = require('../models/Supplier');
 const User = require('../models/User');
 const crmDb = require('../config/crmDb');
 const mongoose = require('mongoose');
@@ -686,7 +687,8 @@ router.patch('/:id/status', protect, verifiedOnly, async (req, res) => {
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
 
     res.json({
       success: true,
@@ -738,6 +740,7 @@ router.get('/:bookingId', protect, verifiedOnly, async (req, res) => {
       .populate('assignedTo', 'name email')
       .populate('comments.sender', 'name email role')
       .populate('services.supplier')
+      .populate('payments.supplier', 'supplierId fullName businessName city')
       .lean();
 
     if (!booking) {
@@ -817,7 +820,8 @@ router.patch('/:id/comment', protect, verifiedOnly, upload.single('file'), async
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
 
     res.json({
       success: true,
@@ -983,7 +987,7 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       return res.status(403).json({ success: false, message: 'Access denied: You are not authorized to update payment for this booking.' });
     }
 
-    const { amount, transactionId, paymentDate, paymentFrom, paymentTo, paymentMode, attachmentName } = req.body;
+    const { amount, transactionId, paymentDate, paymentFrom, paymentTo, paymentMode, attachmentName, supplierId } = req.body;
 
     if (amount === undefined || amount === '') {
       return res.status(400).json({ success: false, message: 'Payment amount is required' });
@@ -996,6 +1000,13 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
 
     if (!transactionId || !transactionId.trim()) {
       return res.status(400).json({ success: false, message: 'Transaction ID is required' });
+    }
+
+    let supplier = null;
+    if (paymentTo === 'SUPPLIER') {
+      if (!supplierId || !mongoose.Types.ObjectId.isValid(String(supplierId))) return res.status(400).json({ success: false, message: 'Please select a supplier for this payment' });
+      supplier = await Supplier.findById(supplierId).select('supplierId fullName businessName').lean();
+      if (!supplier) return res.status(400).json({ success: false, message: 'Selected supplier was not found' });
     }
 
     // Check for duplicate transaction ID across the entire system
@@ -1035,6 +1046,9 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
       paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
       paymentFrom: paymentFrom || 'TRAVELER',
       paymentTo: paymentTo || 'COMPANY',
+      supplier: supplier?._id,
+      supplierName: supplier ? (supplier.businessName || supplier.fullName || '') : '',
+      supplierSupplierId: supplier?.supplierId || '',
       amountPaid: newPayment,
       paymentMode: paymentMode || 'upi',
       status: 'VERIFICATION-REQUIRED',
@@ -1062,7 +1076,8 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
 
     res.json({
       success: true,
@@ -1099,7 +1114,7 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     }
 
     const payment = booking.payments[paymentIndex];
-    const { amountPaid, paymentMode, paymentDate, paymentFrom, paymentTo, details, status, attachmentName } = req.body;
+    const { amountPaid, paymentMode, paymentDate, paymentFrom, paymentTo, details, status, attachmentName, supplierId } = req.body;
 
     // Recalculate paidAmount
     if (amountPaid !== undefined) {
@@ -1114,6 +1129,18 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     if (paymentDate) payment.paymentDate = new Date(paymentDate);
     if (paymentFrom) payment.paymentFrom = paymentFrom;
     if (paymentTo) payment.paymentTo = paymentTo;
+    if (paymentTo === 'SUPPLIER') {
+      if (!supplierId || !mongoose.Types.ObjectId.isValid(String(supplierId))) return res.status(400).json({ success: false, message: 'Please select a supplier for this payment' });
+      const supplier = await Supplier.findById(supplierId).select('supplierId fullName businessName').lean();
+      if (!supplier) return res.status(400).json({ success: false, message: 'Selected supplier was not found' });
+      payment.supplier = supplier._id;
+      payment.supplierName = supplier.businessName || supplier.fullName || '';
+      payment.supplierSupplierId = supplier.supplierId || '';
+    } else if (paymentTo && paymentTo !== 'SUPPLIER') {
+      payment.supplier = undefined;
+      payment.supplierName = '';
+      payment.supplierSupplierId = '';
+    }
     if (details && details.trim() !== payment.details) {
       // Check for duplicate transaction ID when changing it
       const duplicateBooking = await isTransactionIdDuplicate(details, booking._id);
@@ -1153,7 +1180,8 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
 
     res.json({
       success: true,
@@ -1278,7 +1306,8 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
-      .populate('comments.sender', 'name email role');
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
 
     const wasAutoConfirmed = updatedBooking.status === 'Confirmed' && req.body.status === 'VERIFIED';
     res.json({
