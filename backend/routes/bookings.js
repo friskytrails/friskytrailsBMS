@@ -37,23 +37,29 @@ const saveToSentFolder = async (mail) => {
 // Resolve creator references from either the local app users or CRM users.
 async function resolveBookingCreator(booking) {
   const creatorId = booking.createdBy;
-  if (!creatorId || !mongoose.Types.ObjectId.isValid(String(creatorId))) {
+  if (creatorId && typeof creatorId === "object" && creatorId._id && (creatorId.name || creatorId.email)) return booking;
+  if (!creatorId) {
     booking.createdBy = null;
     return booking;
   }
 
   const id = String(creatorId);
-  let creator = await User.findById(id).select("name email").lean();
+  let creator = null;
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    creator = await User.findById(id).select("name email").lean();
+  }
 
   if (!creator && crmDb.readyState === 1) {
+    const creatorOr = [{ _id: id }, { userId: id }, { id }];
+    if (mongoose.Types.ObjectId.isValid(id)) creatorOr.unshift({ _id: new mongoose.Types.ObjectId(id) });
     creator = await crmDb.db.collection("users").findOne(
-      { $or: [{ _id: new mongoose.Types.ObjectId(id) }, { _id: id }, { userId: id }, { id }] },
-      { projection: { name: 1, fullName: 1, username: 1, email: 1, emailAddress: 1 } }
+      { $or: creatorOr },
+      { projection: { name: 1, fullName: 1, full_name: 1, displayName: 1, firstName: 1, lastName: 1, username: 1, email: 1, emailAddress: 1 } }
     );
     if (creator) {
       creator = {
         _id: creator._id,
-        name: creator.name || creator.fullName || creator.username,
+        name: creator.fullName || creator.full_name || creator.displayName || creator.name || [creator.firstName, creator.lastName].filter(Boolean).join(" ") || creator.username || creator.email || creator.emailAddress || String(creator._id),
         email: creator.email || creator.emailAddress,
       };
     }
@@ -61,6 +67,11 @@ async function resolveBookingCreator(booking) {
 
   booking.createdBy = creator || null;
   return booking;
+}
+
+async function resolveBookingCreators(bookings) {
+  for (const booking of bookings) await resolveBookingCreator(booking);
+  return bookings;
 }
 // Searches both Booking.transactionId and all Booking.payments[].details fields
 async function isTransactionIdDuplicate(txnId, excludeBookingId = null) {
@@ -223,11 +234,11 @@ router.get('/', protect, verifiedOnly, async (req, res) => {
 
     const bookings = await Booking.find(query)
       .select('-screenshot -comments -payments')
-      .populate('createdBy', 'name email')
       .populate('assignedTo', 'name email')
       .sort({ createdAt: -1 })
       .lean();
 
+    await resolveBookingCreators(bookings);
     res.json({
       success: true,
       count: bookings.length,
@@ -335,6 +346,7 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    await resolveBookingCreators(bookings);
     res.json({
       success: true,
       count: bookings.length,

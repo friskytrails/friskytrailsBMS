@@ -537,7 +537,7 @@ const CreateBooking = ({ isEdit }) => {
               {/* Destination Location */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Destination Location <span className="text-rose-450">*</span>
+                  Start/End Location <span className="text-rose-450">*</span>
                 </label>
                 <div className="relative rounded-md shadow-sm">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

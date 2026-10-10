@@ -57,11 +57,21 @@ const SearchDashboard = () => {
     if (user?.role !== 'admin') return;
     const fetchCreatorOptions = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/admin/users`, {
+        const res = await fetch(`${API_BASE}/api/bookings`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (data.success) setCreatorOptions(data.data);
+        if (data.success) {
+          const creators = data.data
+            .map((booking) => booking.createdBy)
+            .filter(Boolean)
+            .reduce((uniqueCreators, creator) => {
+              const creatorId = creator._id || creator;
+              if (!uniqueCreators.some((item) => (item._id || item) === creatorId)) uniqueCreators.push(creator);
+              return uniqueCreators;
+            }, []);
+          setCreatorOptions(creators);
+        }
       } catch (err) {
         console.error('Error fetching booking creators:', err);
       }

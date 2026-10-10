@@ -63,7 +63,6 @@ const AddSupplier = () => {
     const e = {};
     if (!formData.country.trim()) e.country = 'Country is required';
     if (!formData.state.trim()) e.state = 'State is required';
-    if (!formData.city.trim()) e.city = 'City is required';
     if (!formData.fullName.trim()) e.fullName = 'Full name is required';
     if (!formData.businessName.trim()) e.businessName = 'Business name is required';
     if (!formData.contactNumber) e.contactNumber = 'Contact number is required';
@@ -211,7 +210,7 @@ const AddSupplier = () => {
                 <ErrMsg touched={touched} errors={errors} name="state" />
               </div>
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">City <span className="text-rose-400">*</span></label>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">City</label>
                 <select name="city" value={formData.city} onChange={handleLocationChange} onBlur={() => handleBlur("city")} disabled={locationsLoading || !formData.state} className={getInputCls("city", false)}>
                   <option value="">Select city</option>
                   {locations.cities.filter(city => city.state === locations.states.find(state => state.name === formData.state && state.country === locations.countries.find(country => country.name === formData.country)?.id)?.id).map(city => <option key={city.id} value={city.name}>{city.name}</option>)}

@@ -20,8 +20,8 @@ const SupplierSchema = new mongoose.Schema({
   },
   city: {
     type: String,
-    required: [true, 'City is required'],
     trim: true,
+    default: '',
   },
 
   // Contact Information
