@@ -3,8 +3,15 @@ import { Link } from 'react-router-dom';
 
 import { API_BASE } from '../config';
 import {
-  Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye, Copy
+  Plus, Check, X, Search, ChevronDown, ChevronUp, FileText, CheckCircle, Clock, Trash2, Edit, CreditCard, Send, DollarSign, Eye, Copy, RotateCcw
 } from 'lucide-react';
+
+const formatPaymentMode = (payment) => {
+  if (payment?.paymentMode === 'Account' && payment?.accountSubMode) {
+    return payment.accountSubMode;
+  }
+  return payment?.paymentMode || 'N/A';
+};
 
 const isCashTravellerToSupplier = (payment) => payment?.paymentFrom === 'Traveller' && payment?.paymentTo === 'Supplier' && payment?.paymentMode === 'Direct Cash';
 
@@ -30,6 +37,12 @@ const getServiceDateRange = (service) => {
   const end = formatServiceDate(service?.endDate);
   if (start && end) return `${start} to ${end}`;
   return start || end || null;
+};
+
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
 };
 
 const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
@@ -80,12 +93,16 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   const [generatedPaymentIds, setGeneratedPaymentIds] = useState({});
   const [copiedId, setCopiedId] = useState(null);
 
+  const bookingStartDate = toDateInputValue(booking.startDate);
+  const bookingEndDate = toDateInputValue(booking.endDate);
+
   // Verification screenshot modal state
   const [verificationModal, setVerificationModal] = useState({
     isOpen: false,
     serviceId: null,
     paymentId: null,
     file: null,
+    accountSubMode: '',
     loading: false
   });
 
@@ -120,7 +137,13 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   }, [searchQuery, supplierType]);
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((current) => {
+      const next = { ...current, [name]: value };
+      if (name === 'startDate' && next.endDate && value > next.endDate) next.endDate = value;
+      if (name === 'endDate' && next.startDate && value < next.startDate) next.startDate = value;
+      return next;
+    });
   };
 
   const handleAddService = async () => {
@@ -131,6 +154,12 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     if (!selectedSupplier && supplierType !== 'Outsourced') {
        setError('Please select a supplier');
        return;
+    }
+    if ((formData.startDate && (formData.startDate < bookingStartDate || formData.startDate > bookingEndDate)) ||
+        (formData.endDate && (formData.endDate < bookingStartDate || formData.endDate > bookingEndDate)) ||
+        (formData.startDate && formData.endDate && formData.startDate > formData.endDate)) {
+      setError('Service dates must fall within the booking dates.');
+      return;
     }
     
     setLoading(true);
@@ -218,6 +247,11 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     await updateServiceStatus(service.serviceId, "Cancelled No Charges");
   };
 
+  const handleRestoreService = async (service) => {
+    if (!window.confirm("Restore " + getSupplierDisplayName(service) + "?")) return;
+    await updateServiceStatus(service.serviceId, "Pending");
+  };
+
   const handlePaymentSubmit = async (serviceId, paymentData, file) => {
     try {
       const formDataObj = new FormData();
@@ -259,6 +293,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
         serviceId,
         paymentId,
         file: null,
+        accountSubMode: payment?.accountSubMode || '',
         loading: false
       });
       return;
@@ -288,10 +323,17 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith("image/"));
     if (!imageItem) return;
     event.preventDefault();
-    setVerificationModal(prev => ({ ...prev, file: imageItem.getAsFile() }));
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+    const extension = blob.type.split('/')[1] || 'png';
+    const file = new File([blob], 'payment-screenshot-' + Date.now() + '.' + extension, { type: blob.type });
+    setVerificationModal(prev => ({ ...prev, file }));
   };
 
   const submitVerifyWithScreenshot = async () => {
+    if (!verificationModal.accountSubMode) {
+      return alert('Please select the bank account.');
+    }
     if (!verificationModal.file) {
       return alert('Please select a screenshot file first.');
     }
@@ -299,6 +341,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     try {
       const formData = new FormData();
       formData.append('status', 'VERIFIED');
+      formData.append('accountSubMode', verificationModal.accountSubMode || '');
       formData.append('screenshot', verificationModal.file);
 
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${verificationModal.serviceId}/payment/${verificationModal.paymentId}/verify`, {
@@ -311,7 +354,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       const data = await res.json();
       if (data.success) {
         onServiceUpdated(data.data);
-        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, loading: false });
+        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, accountSubMode: '', loading: false });
       } else {
         alert(data.message || 'Error verifying payment');
       }
@@ -344,10 +387,22 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   };
 
   const handleEditInputChange = (e) => {
-    setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setEditFormData((current) => {
+      const next = { ...current, [name]: value };
+      if (name === 'startDate' && next.endDate && value > next.endDate) next.endDate = value;
+      if (name === 'endDate' && next.startDate && value < next.startDate) next.startDate = value;
+      return next;
+    });
   };
 
   const handleSaveEdit = async (serviceId, supplierTypeVal) => {
+    if ((editFormData.startDate && (editFormData.startDate < bookingStartDate || editFormData.startDate > bookingEndDate)) ||
+        (editFormData.endDate && (editFormData.endDate < bookingStartDate || editFormData.endDate > bookingEndDate)) ||
+        (editFormData.startDate && editFormData.endDate && editFormData.startDate > editFormData.endDate)) {
+      alert('Service dates must fall within the booking dates.');
+      return;
+    }
     setEditLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${serviceId}`, {
@@ -426,7 +481,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       if (supplier.accountNumber) accParts.push(`A/C: ${supplier.accountNumber}`);
       if (supplier.ifscCode) accParts.push(`IFSC: ${supplier.ifscCode}`);
       if (supplier.upiId) accParts.push(`UPI ID: ${supplier.upiId}`);
-      if (supplier.upiNumber) accParts.push(`UPI No: ${supplier.upiNumber}`);
+      if (supplier.upiNumber) accParts.push(`UPI Number: ${supplier.upiNumber}`);
       if (accParts.length > 0) accountDetailsVal = accParts.join('\n');
     }
 
@@ -437,10 +492,10 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     const copyText = `Payment ID: ${paymentIdVal}
 Supplier Name: ${supplierNameVal}
 Customer Name: ${booking.travellerName || 'N/A'}
-Travel Date: ${serviceDateVal}
-Account Details:
+Service Date: ${serviceDateVal}
+*Account Details:*
 ${accountDetailsVal}
-Amount to Pay: ${amountToPayVal}
+*Amount to Pay: ${amountToPayVal}*
 Remark: ${remarkVal}`;
 
     navigator.clipboard.writeText(copyText);
@@ -526,11 +581,11 @@ Remark: ${remarkVal}`;
 
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Start Date</label>
-                <input type="date" name="startDate" value={formData.startDate} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:border-indigo-500" />
+                <input type="date" name="startDate" min={bookingStartDate || undefined} max={formData.endDate || bookingEndDate || undefined} value={formData.startDate} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:border-indigo-500" />
               </div>
               <div>
                 <label className="block text-xs text-slate-500 mb-1">End Date</label>
-                <input type="date" name="endDate" value={formData.endDate} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:border-indigo-500" />
+                <input type="date" name="endDate" min={formData.startDate || bookingStartDate || undefined} max={bookingEndDate || undefined} value={formData.endDate} onChange={handleInputChange} className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-sm focus:border-indigo-500" />
               </div>
 
               {(supplierType === 'Hotels' || supplierType === 'Transport' || supplierType === 'Adventure' || supplierType === 'Guides' || supplierType === 'Outsourced') && (
@@ -814,11 +869,11 @@ Remark: ${remarkVal}`;
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-500 mb-1">Start Date</label>
-                          <input type="date" name="startDate" value={editFormData.startDate} onChange={handleEditInputChange} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" />
+                          <input type="date" name="startDate" min={bookingStartDate || undefined} max={editFormData.endDate || bookingEndDate || undefined} value={editFormData.startDate} onChange={handleEditInputChange} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" />
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-500 mb-1">End Date</label>
-                          <input type="date" name="endDate" value={editFormData.endDate} onChange={handleEditInputChange} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" />
+                          <input type="date" name="endDate" min={editFormData.startDate || bookingStartDate || undefined} max={bookingEndDate || undefined} value={editFormData.endDate} onChange={handleEditInputChange} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" />
                         </div>
                         {service.supplierType === 'Hotels' && (
                           <>
@@ -1063,7 +1118,7 @@ Remark: ${remarkVal}`;
                               <div className="flex items-center gap-3 flex-wrap">
                                 <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">{p.paymentId}</span>
                                 <div className="text-sm font-bold text-slate-200">₹{p.paidAmount?.toLocaleString()}</div>
-                                <div className="text-[10px] text-slate-500">{new Date(p.paymentDate).toLocaleDateString()} via {p.paymentMode} {p.accountSubMode && <>({p.accountSubMode})</>}</div>
+                                <div className="text-[10px] text-slate-500">{new Date(p.paymentDate).toLocaleDateString()} via {formatPaymentMode(p)}</div>
                                 <div className="text-xs px-2 py-0.5 bg-slate-900 rounded border border-slate-700 text-slate-400">
                                   {p.paymentFrom} → {p.paymentTo}
                                 </div>
@@ -1129,7 +1184,12 @@ Remark: ${remarkVal}`;
                 </div>
                 <p className="text-sm font-semibold text-slate-300 mt-1">{getSupplierDisplayName(service)}</p>
               </div>
-              <span className="text-xs font-bold text-rose-400">Deleted</span>
+              <button
+                onClick={() => handleRestoreService(service)}
+                className="flex items-center gap-1.5 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Restore
+              </button>
             </div>
           ))}
         </div>
@@ -1160,6 +1220,27 @@ Remark: ${remarkVal}`;
               This payment request requires a screenshot. Upload a file or focus this window and paste an image.
             </p>
             <div className="space-y-4" onPaste={handlePasteVerificationImage} tabIndex={0}>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Bank Account *</label>
+                <select
+                  required
+                  value={verificationModal.accountSubMode}
+                  onChange={(e) => setVerificationModal(prev => ({ ...prev, accountSubMode: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                >
+                  <option value="">Select bank account</option>
+                  <option value="Kalpana BOI">Kalpana BOI</option>
+                  <option value="Kalpana PNB">Kalpana PNB</option>
+                  <option value="Babita AU">Babita AU</option>
+                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                  <option value="FT HDFC">FT HDFC</option>
+                  <option value="Pratyush SBI">Pratyush SBI</option>
+                </select>
+              </div>
+              <div className="rounded-lg border border-dashed border-indigo-500/40 bg-indigo-500/5 p-3 text-center text-xs text-slate-400">
+                Click below to upload, or click this area and press Ctrl/Cmd + V to paste a screenshot.
+                {verificationModal.file && <div className="mt-1 text-emerald-400 truncate">{verificationModal.file.name || 'Screenshot pasted'}</div>}
+              </div>
               <input
                 type="file"
                 accept="image/*,application/pdf"
@@ -1168,7 +1249,7 @@ Remark: ${remarkVal}`;
               />
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, loading: false })}
+                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, accountSubMode: '', loading: false })}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors"
                 >
                   Cancel

@@ -20,6 +20,7 @@ const CreateBooking = ({ isEdit }) => {
     packageName: '',
     location: '',
     totalAmount: '',
+    gstAmount: '',
     paidAmount: '',
     dueAmount: 0,
     transactionId: '',
@@ -45,6 +46,7 @@ const CreateBooking = ({ isEdit }) => {
     packageName: false,
     location: false,
     totalAmount: false,
+    gstAmount: false,
     paidAmount: false,
     transactionId: false,
     screenshot: false,
@@ -57,7 +59,7 @@ const CreateBooking = ({ isEdit }) => {
   useEffect(() => {
     const total = parseFloat(formData.totalAmount) || 0;
     const paid = parseFloat(formData.paidAmount) || 0;
-    const due = Math.max(0, total - paid);
+    const due = total - paid;
     
     setFormData((prev) => ({
       ...prev,
@@ -89,6 +91,7 @@ const CreateBooking = ({ isEdit }) => {
             packageName: b.packageName || '',
             location: b.location || '',
             totalAmount: b.totalAmount || '',
+            gstAmount: b.gstAmount !== undefined ? b.gstAmount : '',
             paidAmount: b.paidAmount !== undefined ? b.paidAmount : '',
             dueAmount: b.dueAmount || 0,
             transactionId: b.transactionId || '',
@@ -165,6 +168,11 @@ const CreateBooking = ({ isEdit }) => {
       tempErrors.totalAmount = 'Total amount cannot be negative';
     }
     
+    // GST Amount validation
+    if (data.gstAmount !== '' && data.gstAmount !== null && parseFloat(data.gstAmount) < 0) {
+      tempErrors.gstAmount = 'GST amount cannot be negative';
+    }
+
     // Paid Amount validation
     if (data.paidAmount === '' || data.paidAmount === null) {
       tempErrors.paidAmount = 'Paid amount is required';
@@ -275,6 +283,7 @@ const CreateBooking = ({ isEdit }) => {
       data.append('packageName', formData.packageName);
       data.append('location', formData.location);
       data.append('totalAmount', formData.totalAmount);
+      data.append('gstAmount', formData.gstAmount || '0');
       data.append('paidAmount', formData.paidAmount || '0');
       data.append('transactionId', formData.transactionId);
       data.append('paymentMode', formData.paymentMode);
@@ -654,6 +663,34 @@ const CreateBooking = ({ isEdit }) => {
                   <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5" />
                     <span>{validationErrors.totalAmount}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* GST Amount */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  GST Amount (₹) <span className="text-slate-500">(Included in Total)</span>
+                </label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <IndianRupee className="h-4.5 w-4.5 text-slate-500" />
+                  </div>
+                  <input
+                    type="number"
+                    name="gstAmount"
+                    min="0"
+                    value={formData.gstAmount}
+                    onChange={handleInputChange}
+                    onBlur={() => handleBlur('gstAmount')}
+                    className={getInputClass('gstAmount')}
+                    placeholder="2160"
+                  />
+                </div>
+                {touched.gstAmount && validationErrors.gstAmount && (
+                  <p className="mt-1 text-[11px] text-rose-455 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{validationErrors.gstAmount}</span>
                   </p>
                 )}
               </div>

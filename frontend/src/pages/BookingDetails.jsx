@@ -32,6 +32,13 @@ import ServiceOptionsTab from '../components/ServiceOptionsTab';
 import ActivityLogSection from '../components/ActivityLogSection';
 import BookingEmailTab from '../components/BookingEmailTab';
 
+const formatPaymentMode = (payment) => {
+  if (payment?.paymentMode === 'Account' && payment?.accountSubMode) {
+    return payment.accountSubMode;
+  }
+  return payment?.paymentMode || 'N/A';
+};
+
 const getStatusStyles = (status) => {
   switch (status) {
     case 'Fulfillment Done':
@@ -79,6 +86,8 @@ const BookingDetails = () => {
   const leadMessagesRef = useRef(null);
   const [leadLoading, setLeadLoading] = useState(false);
   const [leadError, setLeadError] = useState('');
+  const [alternateLeadPhone, setAlternateLeadPhone] = useState('');
+  const [linkingLead, setLinkingLead] = useState(false);
   const [newCrmNote, setNewCrmNote] = useState('');
   const [addingCrmNote, setAddingCrmNote] = useState(false);
 
@@ -153,6 +162,7 @@ const BookingDetails = () => {
   const [fullEditStartDate, setFullEditStartDate] = useState('');
   const [fullEditEndDate, setFullEditEndDate] = useState('');
   const [fullEditTotalAmount, setFullEditTotalAmount] = useState('');
+  const [fullEditGstAmount, setFullEditGstAmount] = useState('');
 
 
   useEffect(() => {
@@ -231,7 +241,8 @@ const BookingDetails = () => {
       });
       
       if (!res.ok) {
-        setLeadError('Lead not found or server error.');
+        if (booking?.crmLead) setLeadData(booking.crmLead);
+        else setLeadError('Lead not found or server error.');
         setLeadLoading(false);
         return;
       }
@@ -239,6 +250,16 @@ const BookingDetails = () => {
       const data = await res.json();
       if (data.success) {
         setLeadData(data.data);
+        fetch(`${API_BASE}/api/bookings/${booking._id}/crm-lead`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mobileNumber: data.data.phone || data.data.mobileNumber || mobileNumber }),
+        }).then(async (linkRes) => {
+          const linkData = await linkRes.json();
+          if (linkData.success) setBooking((current) => ({ ...current, crmLead: linkData.lead, crmLeadPhone: linkData.lead.phone || linkData.lead.mobileNumber }));
+        }).catch((linkErr) => console.error('Could not link CRM lead to booking:', linkErr));
+      } else if (booking?.crmLead) {
+        setLeadData(booking.crmLead);
       } else {
         setLeadError(data.message || 'Lead not found in CRM.');
       }
@@ -246,6 +267,35 @@ const BookingDetails = () => {
       console.error('Error fetching lead data:', err);
       setLeadError('Network connection error.');
     } finally {
+      setLeadLoading(false);
+    }
+  };
+
+  const fetchAlternateLead = async (e) => {
+    e.preventDefault();
+    const phone = alternateLeadPhone.replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      setLeadError('Enter a valid 10-digit phone number.');
+      return;
+    }
+    setLinkingLead(true);
+    setLeadLoading(true);
+    setLeadError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/crm-lead`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mobileNumber: phone }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || 'Lead not found in CRM.');
+      setLeadData(data.lead);
+      setBooking((current) => ({ ...current, crmLead: data.lead, crmLeadPhone: phone }));
+      setAlternateLeadPhone('');
+    } catch (err) {
+      setLeadError(err.message || 'Lead not found in CRM.');
+    } finally {
+      setLinkingLead(false);
       setLeadLoading(false);
     }
   };
@@ -703,6 +753,7 @@ const BookingDetails = () => {
     setFullEditStartDate(booking.startDate ? new Date(booking.startDate).toISOString().split('T')[0] : '');
     setFullEditEndDate(booking.endDate ? new Date(booking.endDate).toISOString().split('T')[0] : '');
     setFullEditTotalAmount(booking.totalAmount || '');
+    setFullEditGstAmount(booking.gstAmount || 0);
     setFormError('');
     setIsFullEditModalOpen(true);
   };
@@ -720,7 +771,8 @@ const BookingDetails = () => {
       !fullEditLocation.trim() ||
       !fullEditStartDate ||
       !fullEditEndDate ||
-      !fullEditTotalAmount
+      !fullEditTotalAmount ||
+      Number(fullEditGstAmount) < 0
     ) {
       setFormError('All fields are required.');
       setSubmittingPayment(false);
@@ -744,6 +796,7 @@ const BookingDetails = () => {
       startDate: fullEditStartDate,
       endDate: fullEditEndDate,
       totalAmount: Number(fullEditTotalAmount),
+      gstAmount: Number(fullEditGstAmount) || 0,
     };
 
     await handleSaveBookingFields(payload, () => {
@@ -799,6 +852,20 @@ const BookingDetails = () => {
     setFormStatus(payment.status || 'VERIFICATION-REQUIRED');
     setFormError('');
     setIsAddPaymentModalOpen(true);
+  };
+
+  const handlePastePaymentScreenshot = (e) => {
+    const imageItem = Array.from(e.clipboardData?.items || []).find((item) => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+
+    const extension = blob.type.split('/')[1] || 'png';
+    const file = new File([blob], 'payment-screenshot-' + Date.now() + '.' + extension, { type: blob.type });
+    setFormAttachment(file);
+    setFormAttachmentName(file.name);
+    e.preventDefault();
   };
 
   const handlePaymentFormSubmit = async (e) => {
@@ -1193,6 +1260,7 @@ const BookingDetails = () => {
   );
 
   const totalAmount = booking.totalAmount || 0;
+  const gstAmount = booking.gstAmount || 0;
   const paidAmount = booking.paidAmount || 0;
   const dueAmount = booking.dueAmount || 0;
   const profitMargin = booking.profitMargin || 0;
@@ -1330,7 +1398,7 @@ const BookingDetails = () => {
         </div>
 
         {/* Secondary Info Bar (Horizontal) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
           <div>
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Traveller Name</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
@@ -1359,6 +1427,12 @@ const BookingDetails = () => {
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Package Cost</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
               ₹{totalAmount.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">GST Amount</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+              ₹{gstAmount.toLocaleString()}
             </div>
           </div>
           <div>
@@ -1686,6 +1760,11 @@ const BookingDetails = () => {
                       <span className="text-xs md:text-sm font-extrabold text-slate-300 mt-1.5 font-mono">₹{totalAmount.toLocaleString()}</span>
                     </div>
 
+                    <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-lg flex flex-col justify-between shadow-inner">
+                      <span className="text-[10px] md:text-xs font-extrabold text-slate-500 uppercase tracking-wider">GST</span>
+                      <span className="text-xs md:text-sm font-extrabold text-slate-300 mt-1.5 font-mono">₹{gstAmount.toLocaleString()}</span>
+                    </div>
+
                     <div className="bg-blue-500/10 border border-blue-500/20 p-3.5 rounded-lg flex flex-col justify-between relative shadow-inner">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] md:text-xs font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Paid</span>
@@ -1805,7 +1884,7 @@ const BookingDetails = () => {
                   </div>
                   <div className="hidden md:block h-6 w-px bg-slate-800 mx-1"></div>
                   <div className="text-[10px] font-medium text-slate-400 leading-normal">
-                    Formula: <span className="text-slate-300 font-semibold font-mono">₹{totalAmount.toLocaleString()}</span> (Pkg) - <span className="text-slate-300 font-semibold font-mono">₹{((booking.services || []).filter(s => s.serviceStatus !== 'Cancelled No Charges').reduce((sum, s) => sum + (s.b2bCost || 0), 0)).toLocaleString()}</span> (B2B Costs)
+                    Formula: <span className="text-slate-300 font-semibold font-mono">₹{totalAmount.toLocaleString()}</span> (Pkg) - <span className="text-slate-300 font-semibold font-mono">₹{gstAmount.toLocaleString()}</span> (GST) - <span className="text-slate-300 font-semibold font-mono">₹{((booking.services || []).filter(s => s.serviceStatus !== 'Cancelled No Charges').reduce((sum, s) => sum + (s.b2bCost || 0), 0)).toLocaleString()}</span> (B2B Costs)
                   </div>
                 </div>
               </div>
@@ -1878,7 +1957,7 @@ const BookingDetails = () => {
                             <td className="py-3.5 px-3 font-semibold">{formatDate(p.paymentDate)}</td>
                             <td className="py-3.5 px-3 font-semibold text-slate-205">{p.paymentFrom} to {p.paymentTo}{p.paymentTo === 'SUPPLIER' && (p.supplierName || p.supplier?.businessName || p.supplier?.fullName) && (<span className="block text-[10px] text-indigo-400 mt-0.5">{p.supplierName || p.supplier?.businessName || p.supplier?.fullName}</span>)}</td>
                             <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{p.amountPaid.toLocaleString()}</td>
-                            <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{p.paymentMode}</td>
+                            <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{formatPaymentMode(p)}</td>
                             <td className="py-3.5 px-3">
                               <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${p.status === 'VERIFIED' || p.status === 'PAID'
                                   ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
@@ -2033,7 +2112,7 @@ const BookingDetails = () => {
                                 <td className="py-3.5 px-3 font-semibold">{formatDate(sp.paymentDate)}</td>
                                 <td className="py-3.5 px-3 font-semibold text-slate-205">{sp.paymentFrom} → {sp.paymentTo}</td>
                                 <td className="py-3.5 px-3 font-extrabold text-slate-100 font-mono">₹{(sp.paidAmount || 0).toLocaleString()}</td>
-                                <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{sp.paymentMode}</td>
+                                <td className="py-3.5 px-3 font-semibold text-indigo-500 uppercase">{formatPaymentMode(sp)}</td>
                                 <td className="py-3.5 px-3">
                                   <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold border ${
                                     sp.status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25' :
@@ -2120,6 +2199,7 @@ const BookingDetails = () => {
                 booking={booking}
                 token={token}
                 onCommentAdded={(updatedBooking) => setBooking(updatedBooking)}
+                user={user}
               />
             </div>
           )}
@@ -2197,7 +2277,6 @@ const BookingDetails = () => {
                   <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
                     CRM Lead Details & Chat Stream
                   </h2>
-                  <p className="text-xs text-[#e2e8f0] font-bold">WhatsApp-style chronological activity thread</p>
                 </div>
               </div>
               <button
@@ -2218,6 +2297,13 @@ const BookingDetails = () => {
                 <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-5 text-center">
                   <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
                   <p className="text-rose-400 font-bold">{leadError}</p>
+                  <form onSubmit={fetchAlternateLead} className="mt-5 text-left">
+                    <label className="block text-xs font-bold text-white mb-2">Try another phone number</label>
+                    <div className="flex gap-2">
+                      <input value={alternateLeadPhone} onChange={(e) => setAlternateLeadPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="10-digit phone number" className="min-w-0 flex-1 rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500" />
+                      <button type="submit" disabled={linkingLead} className="rounded-lg bg-[#00a884] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{linkingLead ? 'Fetching...' : 'Fetch & Link'}</button>
+                    </div>
+                  </form>
                 </div>
               ) : leadData ? (
                 <div className="space-y-4">
@@ -2459,12 +2545,16 @@ const BookingDetails = () => {
                 />
               </div>
 
-              {/* Payment Mode */}
-              <div>
+              {/* Bank Account */}
+              <div className="relative">
+                <label className="absolute -top-2 left-2.5 bg-slate-900 px-1 text-[10px] text-slate-550 font-semibold">
+                  Bank Account *
+                </label>
                 <select
+                  required
                   value={formPaymentMode}
                   onChange={(e) => setFormPaymentMode(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none transition-colors"
+                  className="w-full bg-slate-950 border border-[#E65F00] focus:ring-1 focus:ring-[#E65F00] rounded px-3.5 py-2 text-slate-300 text-sm focus:outline-none"
                 >
                   <option value="" disabled>Payment Mode</option>
                   <option value="Kalpana BOI">Kalpana BOI</option>
@@ -2531,7 +2621,7 @@ const BookingDetails = () => {
                         <option key={supplier._id} value={supplier._id}>{supplier.businessName || supplier.fullName} ({supplier.supplierId})</option>
                       ))}
                     </select>
-                    <button type="button" onClick={() => navigate('/add-supplier')} className="shrink-0 px-3 py-2 bg-[#00A89E] text-white text-[10px] font-bold uppercase rounded">Add Supplier</button>
+                    <button type="button" onClick={() => window.open('/add-supplier', '_blank', 'noopener,noreferrer')} className="shrink-0 px-3 py-2 bg-[#00A89E] text-white text-[10px] font-bold uppercase rounded">Add Supplier</button>
                   </div>
                 </div>
               )}
@@ -2550,8 +2640,12 @@ const BookingDetails = () => {
               </div>
 
               {/* Attachment block */}
-              <div className="border border-slate-800 rounded p-3 bg-slate-950/50">
-                <span className="text-[10px] text-slate-500 font-semibold block mb-1">Attachment</span>
+              <div
+                className="border border-slate-800 rounded p-3 bg-slate-950/50"
+                onPaste={handlePastePaymentScreenshot}
+                tabIndex={0}
+              >
+                <span className="text-[10px] text-slate-500 font-semibold block mb-1">Screenshot (upload or paste)</span>
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/jpg"
@@ -2802,6 +2896,20 @@ const BookingDetails = () => {
                       className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      GST Amount (Included in Total)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="GST Amount"
+                      value={fullEditGstAmount}
+                      onChange={(e) => setFullEditGstAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+
 
                 </div>
 

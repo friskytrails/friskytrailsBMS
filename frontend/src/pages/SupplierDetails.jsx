@@ -10,6 +10,30 @@ import {
 
 const SUPPLIER_CATEGORIES = ['Hotels', 'Transport', 'Adventure', 'Guides', 'Outsourced'];
 
+const EditableField = ({ icon: Icon, label, field, mono = false, isEditing, editData, supplier, onChange }) => {
+  const value = isEditing ? editData[field] : (supplier[field] || '');
+  if (isEditing) {
+    return (
+      <div>
+        <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
+          {Icon && <Icon className="w-3 h-3" />} {label}
+        </label>
+        <input type="text" value={value} onChange={(e) => onChange(field, e.target.value)} className={`w-full bg-slate-950 border border-indigo-500/40 focus:border-indigo-500 text-slate-100 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all ${mono ? 'font-mono' : ''}`} />
+      </div>
+    );
+  }
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
+        {Icon && <Icon className="w-3 h-3" />} {label}
+      </label>
+      <div className={`bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-inner ${mono ? 'font-mono' : ''}`}>
+        {value || '—'}
+      </div>
+    </div>
+  );
+};
+
 const SupplierDetails = () => {
   const { supplierId } = useParams();
   const { token, user } = useAuth();
@@ -29,6 +53,8 @@ const SupplierDetails = () => {
   const [saveError, setSaveError] = useState('');
 
   const [viewingDoc, setViewingDoc] = useState(null);
+  const [locations, setLocations] = useState({ countries: [], states: [], cities: [] });
+  const [locationsLoading, setLocationsLoading] = useState(true);
 
   useEffect(() => {
     const fetchSupplier = async () => {
@@ -48,6 +74,23 @@ const SupplierDetails = () => {
     };
     fetchSupplier();
   }, [supplierId, token]);
+
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/suppliers/locations`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) setLocations(data.data);
+      } catch (err) {
+        console.error('Error fetching supplier locations:', err);
+      } finally {
+        setLocationsLoading(false);
+      }
+    };
+    fetchLocations();
+  }, [token]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -97,6 +140,15 @@ const SupplierDetails = () => {
       value = value.replace(/\D/g, '').slice(0, 10);
     }
     setEditData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLocationChange = (field, value) => {
+    setEditData(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === 'country' ? { state: '', city: '' } : {}),
+      ...(field === 'state' ? { city: '' } : {}),
+    }));
   };
 
   const toggleCategory = (cat) => {
@@ -180,36 +232,6 @@ const SupplierDetails = () => {
     );
   }
 
-  // Editable field component
-  const EditableField = ({ icon: Icon, label, field, mono = false }) => {
-    const value = isEditing ? editData[field] : (supplier[field] || '');
-    if (isEditing) {
-      return (
-        <div>
-          <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-            {Icon && <Icon className="w-3 h-3" />} {label}
-          </label>
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => handleEditChange(field, e.target.value)}
-            className={`w-full bg-slate-950 border border-indigo-500/40 focus:border-indigo-500 text-slate-100 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all ${mono ? 'font-mono' : ''}`}
-          />
-        </div>
-      );
-    }
-    return (
-      <div>
-        <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">
-          {Icon && <Icon className="w-3 h-3" />} {label}
-        </label>
-        <div className={`bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-4 py-2.5 text-sm font-semibold shadow-inner ${mono ? 'font-mono' : ''}`}>
-          {value || '—'}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto animate-fadeIn font-sans space-y-8">
@@ -280,14 +302,32 @@ const SupplierDetails = () => {
         </div>
 
         {/* Top Info Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
-          <EditableField icon={Store} label="Business Name" field="businessName" />
-          <EditableField icon={User} label="Contact Person" field="fullName" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
+          <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Store} label="Business Name" field="businessName" />
+          <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={User} label="Contact Person" field="fullName" />
           {isEditing ? (
-            <div className="grid grid-cols-3 gap-2 col-span-1">
-              <EditableField icon={MapPin} label="City" field="city" />
-              <EditableField icon={MapPin} label="State" field="state" />
-              <EditableField icon={Globe} label="Country" field="country" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 col-span-1 lg:col-span-2">
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5"><Globe className="w-3 h-3" /> Country</label>
+                <select value={editData.country} onChange={(e) => handleLocationChange('country', e.target.value)} disabled={locationsLoading} className="w-full bg-slate-950 border border-indigo-500/40 focus:border-indigo-500 text-slate-100 rounded-lg px-2 py-2.5 text-xs font-semibold shadow-inner focus:outline-none">
+                  <option value="">Select country</option>
+                  {locations.countries.map(country => <option key={country.id} value={country.name}>{country.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5"><MapPin className="w-3 h-3" /> State</label>
+                <select value={editData.state} onChange={(e) => handleLocationChange('state', e.target.value)} disabled={locationsLoading || !editData.country} className="w-full bg-slate-950 border border-indigo-500/40 focus:border-indigo-500 text-slate-100 rounded-lg px-2 py-2.5 text-xs font-semibold shadow-inner focus:outline-none">
+                  <option value="">Select state</option>
+                  {locations.states.filter(state => state.country === locations.countries.find(country => country.name === editData.country)?.id).map(state => <option key={state.id} value={state.name}>{state.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5"><MapPin className="w-3 h-3" /> City</label>
+                <select value={editData.city} onChange={(e) => handleLocationChange('city', e.target.value)} disabled={locationsLoading || !editData.state} className="w-full bg-slate-950 border border-indigo-500/40 focus:border-indigo-500 text-slate-100 rounded-lg px-2 py-2.5 text-xs font-semibold shadow-inner focus:outline-none">
+                  <option value="">Select city</option>
+                  {locations.cities.filter(city => city.state === locations.states.find(state => state.name === editData.state && state.country === locations.countries.find(country => country.name === editData.country)?.id)?.id).map(city => <option key={city.id} value={city.name}>{city.name}</option>)}
+                </select>
+              </div>
             </div>
           ) : (
             <div>
@@ -336,14 +376,14 @@ const SupplierDetails = () => {
               <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">Contact Information</h3>
             </div>
             <div className="space-y-4">
-              <EditableField icon={Phone} label="Primary Contact" field="contactNumber" mono />
-              <EditableField icon={Phone} label="Alternate Number" field="alternateNumber" mono />
-              <EditableField icon={Mail} label="Email Address" field="email" />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Phone} label="Primary Contact" field="contactNumber" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Phone} label="Alternate Number" field="alternateNumber" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Mail} label="Email Address" field="email" />
               {!isEditing && (
                 <>
-                  <EditableField icon={Globe} label="Country" field="country" />
-                  <EditableField icon={MapPin} label="State" field="state" />
-                  <EditableField icon={MapPin} label="City" field="city" />
+                  <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Globe} label="Country" field="country" />
+                  <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={MapPin} label="State" field="state" />
+                  <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={MapPin} label="City" field="city" />
                 </>
               )}
             </div>
@@ -360,12 +400,12 @@ const SupplierDetails = () => {
                 <div className="text-lg font-bold text-emerald-400 font-mono mt-1">₹{Number(supplier.totalAmountPaid || 0).toLocaleString("en-IN")}</div>
                 <div className="text-[10px] text-slate-500 mt-1">Verified company-to-supplier payments</div>
               </div>
-              <EditableField icon={FileText} label="GSTIN" field="gstin" mono />
-              <EditableField icon={FileText} label="MSME" field="msme" mono />
-              <EditableField icon={Building2} label="Bank Name" field="bankName" />
-              <EditableField icon={CreditCard} label="Account Number" field="accountNumber" mono />
-              <EditableField icon={Hash} label="IFSC Code" field="ifscCode" mono />
-              <EditableField icon={User} label="Account Holder" field="accountHolderName" />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={FileText} label="GSTIN" field="gstin" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={FileText} label="MSME" field="msme" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Building2} label="Bank Name" field="bankName" />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={CreditCard} label="Account Number" field="accountNumber" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Hash} label="IFSC Code" field="ifscCode" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={User} label="Account Holder" field="accountHolderName" />
             </div>
           </div>
 
@@ -375,8 +415,8 @@ const SupplierDetails = () => {
               <h3 className="text-sm md:text-base font-extrabold uppercase tracking-wider text-slate-300">UPI & Documents</h3>
             </div>
             <div className="space-y-4">
-              <EditableField icon={CreditCard} label="UPI ID" field="upiId" mono />
-              <EditableField icon={Phone} label="UPI Number" field="upiNumber" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={CreditCard} label="UPI ID" field="upiId" mono />
+              <EditableField isEditing={isEditing} editData={editData} supplier={supplier} onChange={handleEditChange} icon={Phone} label="UPI Number" field="upiNumber" mono />
             </div>
 
             {/* Documents */}

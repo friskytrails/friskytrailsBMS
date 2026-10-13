@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Supplier = require('../models/Supplier');
+const Lead = require('../models/Lead');
 const User = require('../models/User');
 const crmDb = require('../config/crmDb');
 const mongoose = require('mongoose');
@@ -129,6 +130,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       packageName,
       location,
       totalAmount,
+      gstAmount,
       paidAmount,
       transactionId,
       paymentMode,
@@ -173,6 +175,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       packageName,
       location,
       totalAmount: Number(totalAmount),
+      gstAmount: Number(gstAmount) || 0,
       // The submitted amount is a payment claim until an admin verifies it.
       // Never expose it as paid at booking creation time.
       paidAmount: 0,
@@ -265,17 +268,35 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     if (bookingId) {
       query.bookingId = bookingId.trim();
     }
+
+    // Match IDs stored on the booking, regular payments, and generated service payments.
+    const identifierFilters = [];
     if (paymentId) {
-      query.paymentId = paymentId.trim();
+      const paymentIdValue = paymentId.trim();
+      identifierFilters.push({
+        $or: [
+          { paymentId: paymentIdValue },
+          { 'payments.paymentId': paymentIdValue },
+          { 'services.payments.paymentId': paymentIdValue },
+        ],
+      });
     }
+    if (transactionId) {
+      const transactionIdValue = transactionId.trim();
+      identifierFilters.push({
+        $or: [
+          { transactionId: transactionIdValue },
+          { 'payments.details': transactionIdValue },
+          { 'services.payments.details': transactionIdValue },
+        ],
+      });
+    }
+    if (identifierFilters.length) query.$and = identifierFilters;
     if (travellerName) {
       query.travellerName = { $regex: travellerName.trim(), $options: 'i' };
     }
     if (travellerPhone) {
       query.travellerPhone = travellerPhone.trim();
-    }
-    if (transactionId) {
-      query.transactionId = transactionId.trim();
     }
     if (createdBy) {
       const creatorId = createdBy.trim();
@@ -846,6 +867,70 @@ router.patch('/:id/comment', protect, verifiedOnly, upload.single('file'), async
   }
 });
 
+// @desc    Delete a discussion comment (Admin only)
+// @route   DELETE /api/bookings/:id/comment/:commentId
+// @access  Private & Admin
+router.delete('/:id/comment/:commentId', protect, verifiedOnly, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admins can delete discussion messages' });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const comment = booking.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+    comment.deleteOne();
+    await booking.save();
+
+    const updatedBooking = await Booking.findById(booking._id)
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('comments.sender', 'name email role')
+      .populate('payments.supplier', 'supplierId fullName businessName city');
+
+    res.json({ success: true, message: 'Discussion message deleted', data: updatedBooking });
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// @desc    Link a CRM lead to a booking by phone number
+// @route   PATCH /api/bookings/:id/crm-lead
+// @access  Private & Verified
+router.patch('/:id/crm-lead', protect, verifiedOnly, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    const isCreator = booking.createdBy && booking.createdBy.toString() === req.user._id.toString();
+    const isAssigned = booking.assignedTo?.some((id) => id.toString() === req.user._id.toString());
+    const isAdmin = req.user.role === 'admin';
+    if (!isAdmin && !isCreator && !isAssigned && !(req.user.role === 'employee' && booking.status !== 'Pending')) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const mobileNumber = String(req.body.mobileNumber || '').replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(mobileNumber)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid 10-digit phone number.' });
+    }
+
+    const lead = await Lead.findOne({ $or: [{ phone: mobileNumber }, { mobileNumber }] }).lean();
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found in CRM.' });
+
+    booking.crmLeadPhone = mobileNumber;
+    booking.crmLead = lead;
+    await booking.save();
+
+    res.json({ success: true, message: 'CRM lead linked to booking', data: booking, lead });
+  } catch (error) {
+    console.error('Link CRM lead error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to link CRM lead' });
+  }
+});
+
 // @desc    Edit a booking
 // @route   PUT /api/bookings/:id/edit
 // @access  Private & Verified
@@ -873,6 +958,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       packageName,
       location,
       totalAmount,
+      gstAmount,
       paidAmount,
       transactionId,
       paymentMode,
@@ -905,7 +991,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (endDate) booking.endDate = endDate;
 
       // Block all other field changes for employees
-      const restrictedFields = ['packageName', 'location', 'totalAmount', 'paidAmount', 'transactionId',
+      const restrictedFields = ['packageName', 'location', 'totalAmount', 'gstAmount', 'paidAmount', 'transactionId',
         'paymentMode', 'travellerName', 'travellerEmail', 'travellerPhone', 'adults', 'children',
         'status', 'tripStatus', 'profitMargin', 'feedbackRating', 'feedbackComment'];
       const attemptedRestricted = restrictedFields.filter(f => req.body[f] !== undefined && req.body[f] !== '');
@@ -922,6 +1008,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (packageName) booking.packageName = packageName;
       if (location) booking.location = location;
       if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
+      if (gstAmount !== undefined) booking.gstAmount = Number(gstAmount) || 0;
       if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
       if (transactionId) booking.transactionId = transactionId;
       if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
@@ -1033,17 +1120,6 @@ router.patch('/:id/update-payment', protect, verifiedOnly, upload.single('screen
           message: `Transaction ID "${transactionId.trim()}" already exists. Each transaction ID must be unique.`
         });
       }
-    }
-
-    // Only verified payments reduce the balance. paidAmount is normally kept
-    // in sync by the model, but calculate from payment records here as an
-    // additional guard against stale/legacy booking values.
-    const verifiedAmount = booking.payments
-      .filter(payment => payment.status === 'VERIFIED' && payment.paymentFrom === 'TRAVELER')
-      .reduce((sum, payment) => sum + payment.amountPaid, 0);
-    const currentDue = Math.max(0, booking.totalAmount - verifiedAmount);
-    if (newPayment > currentDue) {
-      return res.status(400).json({ success: false, message: `Payment amount ₹${newPayment} exceeds remaining due balance of ₹${currentDue}` });
     }
 
     let screenshotPath = '';
@@ -1267,7 +1343,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
           });
         }
         booking.paidAmount = currentPaidAmount;
-        booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
+        booking.dueAmount = booking.totalAmount - booking.paidAmount;
 
         // Update booking status: automatically confirm when a payment is verified
         if (booking.status !== 'Cancelled') {
@@ -1302,7 +1378,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
           });
         }
         booking.paidAmount = currentPaidAmountReject;
-        booking.dueAmount = Math.max(0, booking.totalAmount - booking.paidAmount);
+        booking.dueAmount = booking.totalAmount - booking.paidAmount;
 
         const rejectionReason = reason || 'No reason provided';
         booking.comments.push({
@@ -1449,6 +1525,17 @@ router.post('/:id/services', protect, verifiedOnly, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Supplier type is required' });
     }
 
+    const requestedStartDate = startDate ? new Date(startDate) : null;
+    const requestedEndDate = endDate ? new Date(endDate) : null;
+    if ((requestedStartDate && Number.isNaN(requestedStartDate.getTime())) || (requestedEndDate && Number.isNaN(requestedEndDate.getTime()))) {
+      return res.status(400).json({ success: false, message: 'Invalid service date' });
+    }
+    if ((requestedStartDate && requestedStartDate < booking.startDate) ||
+        (requestedEndDate && requestedEndDate > booking.endDate) ||
+        (requestedStartDate && requestedEndDate && requestedStartDate > requestedEndDate)) {
+      return res.status(400).json({ success: false, message: 'Service dates must fall within the booking dates.' });
+    }
+
     // Generate unique service ID (SVC-XXXXXX)
     const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
     const serviceId = `SVC-${randomPart}`;
@@ -1537,6 +1624,17 @@ router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) =
       productName, packageName,
       outsourceName, serviceStatus,
     } = req.body;
+
+    const requestedStartDate = startDate !== undefined ? (startDate ? new Date(startDate) : null) : service.startDate;
+    const requestedEndDate = endDate !== undefined ? (endDate ? new Date(endDate) : null) : service.endDate;
+    if ((requestedStartDate && Number.isNaN(requestedStartDate.getTime())) || (requestedEndDate && Number.isNaN(requestedEndDate.getTime()))) {
+      return res.status(400).json({ success: false, message: 'Invalid service date' });
+    }
+    if ((requestedStartDate && requestedStartDate < booking.startDate) ||
+        (requestedEndDate && requestedEndDate > booking.endDate) ||
+        (requestedStartDate && requestedEndDate && requestedStartDate > requestedEndDate)) {
+      return res.status(400).json({ success: false, message: 'Service dates must fall within the booking dates.' });
+    }
 
     if (supplierType) service.supplierType = supplierType;
     if (supplier !== undefined) service.supplier = supplier || undefined;
@@ -1716,7 +1814,7 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     const payment = service.payments.find(p => p.paymentId === req.params.paymentId);
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
 
-    const { status, reason } = req.body;
+    const { status, reason, accountSubMode } = req.body;
     const isCashTravellerToSupplier = payment.paymentFrom === 'Traveller' && payment.paymentTo === 'Supplier' && payment.paymentMode === 'Direct Cash';
 
     if (status === 'VERIFIED') {
@@ -1729,6 +1827,7 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
       }
       payment.status = 'VERIFIED';
       payment.verified = true;
+      if (accountSubMode) payment.accountSubMode = accountSubMode;
       booking.comments.push({
         senderName: `System / ${req.user.name}`,
         message: `Service Payment Verified: ${payment.paymentId} (₹${payment.paidAmount}) for service ${service.serviceId}`,

@@ -110,7 +110,7 @@ router.get("/locations", protect, verifiedOnly, async (req, res) => {
 // @access  Protected (verified employees & admins)
 router.get('/search', protect, verifiedOnly, async (req, res) => {
   try {
-    const { supplierId, fullName, businessName, contactNumber, city, supplierFor, q } = req.query;
+    const { supplierId, fullName, businessName, contactNumber, city, state, country, supplierFor, q } = req.query;
     const filter = {};
 
     // Standard simple search logic
@@ -130,6 +130,8 @@ router.get('/search', protect, verifiedOnly, async (req, res) => {
     if (businessName) filter.businessName = new RegExp(businessName.trim(), 'i');
     if (contactNumber) filter.contactNumber = new RegExp(contactNumber.trim(), 'i');
     if (city) filter.city = new RegExp(city.trim(), 'i');
+    if (state) filter.state = new RegExp(state.trim(), 'i');
+    if (country) filter.country = new RegExp(country.trim(), 'i');
     if (supplierFor) filter.supplierFor = supplierFor; // Array inclusion match
 
     const suppliers = await Supplier.find(filter)

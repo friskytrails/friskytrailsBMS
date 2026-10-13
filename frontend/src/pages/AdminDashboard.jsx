@@ -432,7 +432,7 @@ const AdminDashboard = () => {
       if (supplier.accountNumber) accParts.push(`A/C: ${supplier.accountNumber}`);
       if (supplier.ifscCode) accParts.push(`IFSC: ${supplier.ifscCode}`);
       if (supplier.upiId) accParts.push(`UPI ID: ${supplier.upiId}`);
-      if (supplier.upiNumber) accParts.push(`UPI No: ${supplier.upiNumber}`);
+      if (supplier.upiNumber) accParts.push(`UPI Number: ${supplier.upiNumber}`);
       if (accParts.length > 0) accountDetailsVal = accParts.join('\n');
     }
 
@@ -442,10 +442,10 @@ const AdminDashboard = () => {
     const copyText = `Payment ID: ${paymentIdVal}
 Supplier Name: ${supplierNameVal}
 Customer Name: ${p.travellerName || 'N/A'}
-Travel Date: ${serviceDateVal}
-Account Details:
+Service Date: ${serviceDateVal}
+*Account Details:*
 ${accountDetailsVal}
-Amount to Pay: ${amountToPayVal}
+*Amount to Pay: ${amountToPayVal}*
 Remark: ${remarkVal}`;
 
     navigator.clipboard.writeText(copyText);

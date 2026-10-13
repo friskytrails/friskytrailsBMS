@@ -181,6 +181,11 @@ const BookingSchema = new mongoose.Schema({
     required: [true, 'Please add a total amount'],
     min: [0, 'Total amount cannot be negative'],
   },
+  gstAmount: {
+    type: Number,
+    min: [0, 'GST amount cannot be negative'],
+    default: 0,
+  },
   paidAmount: {
     type: Number,
     required: [true, 'Please add a paid amount'],
@@ -190,7 +195,6 @@ const BookingSchema = new mongoose.Schema({
   dueAmount: {
     type: Number,
     required: [true, 'Due amount is required'],
-    min: [0, 'Due amount cannot be negative'],
     default: 0,
   },
   transactionId: {
@@ -224,6 +228,8 @@ const BookingSchema = new mongoose.Schema({
     trim: true,
     match: [/^[6-9]\d{9}$/, 'Please provide a valid 10-digit Indian phone number starting with 6, 7, 8, or 9'],
   },
+  crmLeadPhone: { type: String, trim: true, default: '' },
+  crmLead: { type: mongoose.Schema.Types.Mixed, default: null },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -398,7 +404,7 @@ BookingSchema.pre('validate', async function (next) {
 
   // Calculate Due Amount
   if (this.totalAmount !== undefined && this.paidAmount !== undefined) {
-    this.dueAmount = Math.max(0, this.totalAmount - this.paidAmount);
+    this.dueAmount = this.totalAmount - this.paidAmount;
   }
 
   // Recalculate totalDue for each service based on verified service payments
@@ -411,11 +417,11 @@ BookingSchema.pre('validate', async function (next) {
     });
   }
 
-  // Calculate Profit Margin: totalAmount - sum of b2bCost of active (non-cancelled no charges) services
+  // Calculate Profit Margin: package total excluding GST, minus active service costs
   const activeB2BCost = (this.services || [])
     .filter(s => s.serviceStatus !== 'Cancelled No Charges')
     .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
-  this.profitMargin = (this.totalAmount || 0) - activeB2BCost;
+  this.profitMargin = (this.totalAmount || 0) - (this.gstAmount || 0) - activeB2BCost;
 
   // Generate Booking ID if not exists
   if (!this.bookingId) {
@@ -482,7 +488,7 @@ BookingSchema.post('init', function (doc) {
 
   // Recalculate dueAmount to stay consistent
   if (doc.totalAmount !== undefined && doc.paidAmount !== undefined) {
-    doc.dueAmount = Math.max(0, doc.totalAmount - doc.paidAmount);
+    doc.dueAmount = doc.totalAmount - doc.paidAmount;
   }
   // Recalculate totalDue for each service based on verified service payments
   if (doc.services && doc.services.length > 0) {
@@ -498,7 +504,7 @@ BookingSchema.post('init', function (doc) {
   const activeB2BCost = (doc.services || [])
     .filter(s => s.serviceStatus !== 'Cancelled No Charges')
     .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
-  doc.profitMargin = (doc.totalAmount || 0) - activeB2BCost;
+  doc.profitMargin = (doc.totalAmount || 0) - (doc.gstAmount || 0) - activeB2BCost;
 });
 
 BookingSchema.index({ travellerName: 1 });

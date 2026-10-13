@@ -80,11 +80,11 @@ const Navbar = () => {
 
                   {(user.role === 'employee' || user.role === 'admin') && (
                     <>
-                      <Link to="/add-supplier" className={navLinkClass('/add-supplier')}>
+                      <Link to="/add-supplier" target="_blank" rel="noopener noreferrer" className={navLinkClass('/add-supplier')}>
                         <Truck className="w-4 h-4" />
                         <span>Add Supplier</span>
                       </Link>
-                      <Link to="/search-suppliers" className={navLinkClass('/search-suppliers')}>
+                      <Link to="/search-suppliers" target="_blank" rel="noopener noreferrer" className={navLinkClass('/search-suppliers')}>
                         <Store className="w-4 h-4" />
                         <span>Search Suppliers</span>
                       </Link>

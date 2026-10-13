@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, MessageSquare, AlertCircle, Paperclip, FileText, X } from 'lucide-react';
+import { Send, MessageSquare, AlertCircle, Paperclip, FileText, X, Trash2 } from 'lucide-react';
 import { API_BASE } from '../config';
 
 const formatCommentText = (text) => {
@@ -34,13 +34,14 @@ const formatCommentText = (text) => {
   });
 };
 
-const CommentSection = ({ booking, token, onCommentAdded }) => {
+const CommentSection = ({ booking, token, onCommentAdded, user }) => {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
   
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -142,6 +143,30 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
     }
   };
 
+  const handleDeleteComment = async (comment) => {
+    if (user?.role !== 'admin') return;
+    if (!window.confirm('Delete this discussion message?')) return;
+
+    setDeletingCommentId(comment._id);
+    setError('');
+    try {
+      const res = await fetch(API_BASE + '/api/bookings/' + booking._id + '/comment/' + comment._id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      const data = await res.json();
+      if (data.success) {
+        onCommentAdded?.(data.data);
+      } else {
+        setError(data.message || 'Failed to delete comment');
+      }
+    } catch (err) {
+      console.error('Error deleting comment:', err);
+      setError('Connection failed');
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
   return (
     <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col h-full min-h-[400px]">
       <h2 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
@@ -177,9 +202,26 @@ const CommentSection = ({ booking, token, onCommentAdded }) => {
                       {isAdmin ? 'Admin' : 'Agent'}
                     </span>
                   </span>
-                  <span className="text-[10px] text-slate-500">
-                    {new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500">
+                      {new Date(comment.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {user?.role === 'admin' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteComment(comment)}
+                        disabled={deletingCommentId === comment._id}
+                        className="p-1 text-slate-500 hover:text-rose-400 disabled:opacity-50 transition-colors"
+                        title="Delete discussion message"
+                      >
+                        {deletingCommentId === comment._id ? (
+                          <span className="block w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Bubble color: Frisky Teal #00A89E for Admin, Charcoal #1A1A1A for Agent */}

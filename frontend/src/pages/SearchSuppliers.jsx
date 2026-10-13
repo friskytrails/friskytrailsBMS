@@ -14,6 +14,8 @@ const SearchSuppliers = () => {
     fullName: '',
     businessName: '',
     contactNumber: '',
+    country: '',
+      state: '',
     city: '',
     supplierFor: '',
   });
@@ -38,6 +40,8 @@ const SearchSuppliers = () => {
       fullName: '',
       businessName: '',
       contactNumber: '',
+      country: '',
+      state: '',
       city: '',
       supplierFor: '',
     });
@@ -141,6 +145,18 @@ const SearchSuppliers = () => {
               onChange={handleInputChange}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 focus:outline-none transition-colors"
             />
+          </div>
+
+          {/* State */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">State</label>
+            <input type="text" name="state" placeholder="State" value={filters.state} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 focus:outline-none transition-colors" />
+          </div>
+
+          {/* Country */}
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Country</label>
+            <input type="text" name="country" placeholder="Country" value={filters.country} onChange={handleInputChange} className="w-full px-3 py-2 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl text-sm text-slate-100 focus:outline-none transition-colors" />
           </div>
 
           {showAllFilters && (
