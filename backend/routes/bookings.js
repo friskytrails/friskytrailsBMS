@@ -168,7 +168,7 @@ router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
       subject: subject.trim(),
       text: body.trim(),
       html: receiptHtml || body.trim().replace(/\n/g, '<br />'),
-      ...(receiptHtml ? { attachments: [{ filename: 'logo.webp', path: path.resolve(__dirname, '../templates/logo.webp'), cid: 'friskytrails-logo' }] } : {})
+      ...(receiptHtml ? { attachments: [{ filename: 'logo.png', path: path.resolve(__dirname, '../templates/logo.png'), cid: 'friskytrails-logo' }] } : {})
     };
     await createMailTransporter().sendMail(mail);
     try {
