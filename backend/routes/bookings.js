@@ -47,7 +47,7 @@ function buildPaymentReceiptHtml(booking) {
     ? payment.accountSubMode
     : (payment?.paymentMode || 'N/A');
   const values = {
-    logo_url: process.env.FRISKYTRAILS_LOGO_URL || 'https://www.friskytrails.in/logo.png',
+    logo_url: 'cid:friskytrails-logo',
     package_name: booking.packageName || 'FriskyTrails Booking',
     booking_id: booking.bookingId || 'N/A',
     payment_id: payment?.paymentId || 'N/A',
@@ -162,7 +162,14 @@ router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
     if(!subject?.trim()||!body?.trim()) return res.status(400).json({success:false,message:'Subject and email message are required'});
     if(!booking.travellerEmail) return res.status(400).json({success:false,message:'This booking has no customer email address'});
     const receiptHtml = template === 'payment-receipt' ? buildPaymentReceiptHtml(booking) : null;
-    const mail = {from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:receiptHtml || body.trim().replace(/\n/g,'<br />')};
+    const mail = {
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: booking.travellerEmail,
+      subject: subject.trim(),
+      text: body.trim(),
+      html: receiptHtml || body.trim().replace(/\n/g, '<br />'),
+      ...(receiptHtml ? { attachments: [{ filename: 'logo.webp', path: path.resolve(__dirname, '../templates/logo.webp'), cid: 'friskytrails-logo' }] } : {})
+    };
     await createMailTransporter().sendMail(mail);
     try {
       await saveToSentFolder(mail);
