@@ -88,7 +88,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
 
   // Generate Payment ID state
   const [generatePayIdModals, setGeneratePayIdModals] = useState({});
-  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' });
+  const [generatePayIdData, setGeneratePayIdData] = useState({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
   const [generatePayIdLoading, setGeneratePayIdLoading] = useState(false);
   const [generatedPaymentIds, setGeneratedPaymentIds] = useState({});
   const [copiedId, setCopiedId] = useState(null);
@@ -102,6 +102,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     serviceId: null,
     paymentId: null,
     file: null,
+    paymentMode: '',
     accountSubMode: '',
     loading: false
   });
@@ -293,7 +294,8 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
         serviceId,
         paymentId,
         file: null,
-        accountSubMode: payment?.accountSubMode || '',
+        paymentMode: '',
+        accountSubMode: '',
         loading: false
       });
       return;
@@ -331,18 +333,22 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
   };
 
   const submitVerifyWithScreenshot = async () => {
-    if (!verificationModal.accountSubMode) {
+    if (!verificationModal.paymentMode) {
+      return alert('Please select the payment mode.');
+    }
+    if (verificationModal.paymentMode === 'Account' && !verificationModal.accountSubMode) {
       return alert('Please select the bank account.');
     }
-    if (!verificationModal.file) {
+    if (verificationModal.paymentMode === 'Account' && !verificationModal.file) {
       return alert('Please select a screenshot file first.');
     }
     setVerificationModal(prev => ({ ...prev, loading: true }));
     try {
       const formData = new FormData();
       formData.append('status', 'VERIFIED');
+      formData.append('paymentMode', verificationModal.paymentMode);
       formData.append('accountSubMode', verificationModal.accountSubMode || '');
-      formData.append('screenshot', verificationModal.file);
+      if (verificationModal.file) formData.append('screenshot', verificationModal.file);
 
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${verificationModal.serviceId}/payment/${verificationModal.paymentId}/verify`, {
         method: 'PATCH',
@@ -354,7 +360,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       const data = await res.json();
       if (data.success) {
         onServiceUpdated(data.data);
-        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, accountSubMode: '', loading: false });
+        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentMode: '', accountSubMode: '', loading: false });
       } else {
         alert(data.message || 'Error verifying payment');
       }
@@ -432,9 +438,6 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     if (!generatePayIdData.amount || Number(generatePayIdData.amount) <= 0) {
       return alert('Please enter a valid amount');
     }
-    if (generatePayIdData.paymentMode === 'Account' && !generatePayIdData.accountSubMode) {
-      return alert('Please select the bank account');
-    }
     setGeneratePayIdLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${serviceId}/generate-payment-id`, {
@@ -449,7 +452,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       if (data.success) {
         onServiceUpdated(data.data);
         setGeneratedPaymentIds({ ...generatedPaymentIds, [serviceId]: data.paymentId });
-        setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' });
+        setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' });
       } else {
         alert(data.message || 'Error generating payment ID');
       }
@@ -1001,7 +1004,7 @@ Remark: ${remarkVal}`;
                       <h4 className="text-sm font-bold text-slate-200">Service Payments</h4>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => { setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier', paymentMode: 'Account', accountSubMode: '' }); setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: true }); }}
+                          onClick={() => { setGeneratePayIdData({ amount: '', details: '', paymentFrom: 'Company', paymentTo: 'Supplier' }); setGeneratePayIdModals({ ...generatePayIdModals, [service.serviceId]: true }); }}
                           className="flex items-center gap-1 text-xs bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded-lg font-bold transition-colors"
                         >
                           <Send className="w-3.5 h-3.5" /> Generate Payment ID
@@ -1054,7 +1057,7 @@ Remark: ${remarkVal}`;
                           </div>
                         ) : (
                           <>
-                            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">From</label>
                                 <select value={generatePayIdData.paymentFrom} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentFrom: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
@@ -1072,25 +1075,6 @@ Remark: ${remarkVal}`;
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">Amount (₹) *</label>
                                 <input type="number" value={generatePayIdData.amount} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, amount: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200" placeholder="Enter amount" />
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Payment Mode</label>
-                                <select value={generatePayIdData.paymentMode} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, paymentMode: e.target.value, accountSubMode: e.target.value === 'Direct Cash' ? '' : generatePayIdData.accountSubMode })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200">
-                                  <option value="Account">Account</option>
-                                  <option value="Direct Cash">Direct Cash</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] text-slate-500 mb-1">Bank Account</label>
-                                <select disabled={generatePayIdData.paymentMode !== 'Account'} value={generatePayIdData.accountSubMode} onChange={(e) => setGeneratePayIdData({ ...generatePayIdData, accountSubMode: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 disabled:opacity-50">
-                                  <option value="">Select bank</option>
-                                  <option value="Kalpana BOI">Kalpana BOI</option>
-                                  <option value="Kalpana PNB">Kalpana PNB</option>
-                                  <option value="Babita AU">Babita AU</option>
-                                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
-                                  <option value="FT HDFC">FT HDFC</option>
-                                  <option value="Pratyush SBI">Pratyush SBI</option>
-                                </select>
                               </div>
                               <div>
                                 <label className="block text-[10px] text-slate-500 mb-1">Details/Remarks</label>
@@ -1221,6 +1205,19 @@ Remark: ${remarkVal}`;
             </p>
             <div className="space-y-4" onPaste={handlePasteVerificationImage} tabIndex={0}>
               <div>
+                <label className="block text-xs text-slate-400 mb-1">Payment Mode *</label>
+                <select
+                  required
+                  value={verificationModal.paymentMode}
+                  onChange={(e) => setVerificationModal(prev => ({ ...prev, paymentMode: e.target.value, accountSubMode: '' }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                >
+                  <option value="">Select payment mode</option>
+                  <option value="Account">Account</option>
+                  <option value="Direct Cash">Direct Cash</option>
+                </select>
+              </div>
+              {verificationModal.paymentMode === 'Account' && <div>
                 <label className="block text-xs text-slate-400 mb-1">Bank Account *</label>
                 <select
                   required
@@ -1236,20 +1233,22 @@ Remark: ${remarkVal}`;
                   <option value="FT HDFC">FT HDFC</option>
                   <option value="Pratyush SBI">Pratyush SBI</option>
                 </select>
-              </div>
-              <div className="rounded-lg border border-dashed border-indigo-500/40 bg-indigo-500/5 p-3 text-center text-xs text-slate-400">
-                Click below to upload, or click this area and press Ctrl/Cmd + V to paste a screenshot.
-                {verificationModal.file && <div className="mt-1 text-emerald-400 truncate">{verificationModal.file.name || 'Screenshot pasted'}</div>}
-              </div>
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setVerificationModal(prev => ({ ...prev, file: e.target.files[0] }))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
-              />
+              </div>}
+              {verificationModal.paymentMode === 'Account' && <>
+                <div className="rounded-lg border border-dashed border-indigo-500/40 bg-indigo-500/5 p-3 text-center text-xs text-slate-400">
+                  Click below to upload, or click this area and press Ctrl/Cmd + V to paste a screenshot.
+                  {verificationModal.file && <div className="mt-1 text-emerald-400 truncate">{verificationModal.file.name || 'Screenshot pasted'}</div>}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setVerificationModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
+                />
+              </>}
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, accountSubMode: '', loading: false })}
+                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentMode: '', accountSubMode: '', loading: false })}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors"
                 >
                   Cancel

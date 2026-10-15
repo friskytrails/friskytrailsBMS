@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Supplier = require('../models/Supplier');
@@ -12,6 +14,60 @@ const nodemailer = require('nodemailer');
 const { ImapFlow } = require('imapflow');
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { recalculateSupplierPaidAmounts } = require('../utils/supplierPayments');
+const escapeHtml = value => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const formatReceiptDate = value => value
+  ? new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value))
+  : 'N/A';
+
+const formatReceiptAmount = value => Number(value || 0).toLocaleString('en-IN');
+
+const formatReceiptDateRange = (startDate, endDate) => {
+  const start = formatReceiptDate(startDate);
+  const end = formatReceiptDate(endDate);
+  return start === 'N/A' ? 'N/A' : (end === 'N/A' || start === end ? start : `${start} to ${end}`);
+};
+
+function buildPaymentReceiptHtml(booking) {
+  const templatePath = path.resolve(__dirname, '../templates/FriskyTrails_Payment_Receipt_Email_Updated.html');
+  let html = fs.readFileSync(templatePath, 'utf8');
+  const payments = (booking.payments || []).filter(payment => payment.status === 'VERIFIED');
+  const payment = [...payments].sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0]
+    || [...(booking.payments || [])].sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0]
+    || null;
+  const paymentAmount = payment?.amountPaid || 0;
+  const totalPaid = Number(booking.paidAmount || 0);
+  const previousPaid = Math.max(totalPaid - paymentAmount, 0);
+  const paymentMode = payment?.paymentMode === 'Account' && payment?.accountSubMode
+    ? payment.accountSubMode
+    : (payment?.paymentMode || 'N/A');
+  const values = {
+    logo_url: process.env.FRISKYTRAILS_LOGO_URL || 'https://www.friskytrails.in/logo.png',
+    package_name: booking.packageName || 'FriskyTrails Booking',
+    booking_id: booking.bookingId || 'N/A',
+    payment_id: payment?.paymentId || 'N/A',
+    location: booking.location || 'N/A',
+    travel_dates: formatReceiptDateRange(booking.startDate, booking.endDate),
+    participants: `${Number(booking.adults || 0)} adult${Number(booking.adults || 0) === 1 ? '' : 's'}${Number(booking.children || 0) ? `, ${booking.children} child${Number(booking.children) === 1 ? '' : 'ren'}` : ''}`,
+    payment_date: formatReceiptDate(payment?.paymentDate),
+    primary_traveller_name: booking.travellerName || 'N/A',
+    payment_mode: paymentMode,
+    payment_reference: payment?.details || 'N/A',
+    payment_amount: formatReceiptAmount(paymentAmount),
+    package_cost: formatReceiptAmount(booking.totalAmount),
+    previous_paid_amount: formatReceiptAmount(previousPaid),
+    total_paid_amount: formatReceiptAmount(totalPaid),
+    due_amount: formatReceiptAmount(booking.dueAmount),
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/'
+  };
+  return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => escapeHtml(values[key] ?? ''));
+}
+
 const createMailTransporter = () => {
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) throw new Error('Email service is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS.');
   return nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587), secure: process.env.SMTP_SECURE === 'true', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
@@ -102,10 +158,11 @@ router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
     const isCreator=booking.createdBy && booking.createdBy.toString()===req.user._id.toString();
     const isAssigned=booking.assignedTo?.some(id=>id.toString()===req.user._id.toString());
     if(req.user.role!=='admin'&&!isCreator&&!isAssigned) return res.status(403).json({success:false,message:'Access denied'});
-    const {subject,body}=req.body;
+    const {subject,body,template}=req.body;
     if(!subject?.trim()||!body?.trim()) return res.status(400).json({success:false,message:'Subject and email message are required'});
     if(!booking.travellerEmail) return res.status(400).json({success:false,message:'This booking has no customer email address'});
-    const mail = {from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:body.trim().replace(/\n/g,'<br />')};
+    const receiptHtml = template === 'payment-receipt' ? buildPaymentReceiptHtml(booking) : null;
+    const mail = {from:process.env.SMTP_FROM||process.env.SMTP_USER,to:booking.travellerEmail,subject:subject.trim(),text:body.trim(),html:receiptHtml || body.trim().replace(/\n/g,'<br />')};
     await createMailTransporter().sendMail(mail);
     try {
       await saveToSentFolder(mail);
@@ -1814,20 +1871,24 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     const payment = service.payments.find(p => p.paymentId === req.params.paymentId);
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
 
-    const { status, reason, accountSubMode } = req.body;
-    const isCashTravellerToSupplier = payment.paymentFrom === 'Traveller' && payment.paymentTo === 'Supplier' && payment.paymentMode === 'Direct Cash';
-
+    const { status, reason, paymentMode, accountSubMode } = req.body;
+    const verificationPaymentMode = paymentMode || payment.paymentMode;
+    const isDirectCash = verificationPaymentMode === 'Direct Cash';
     if (status === 'VERIFIED') {
-      if (!isCashTravellerToSupplier && !payment.screenshot && !req.file) {
+      if (!isDirectCash && !payment.screenshot && !req.file) {
         return res.status(400).json({ success: false, message: 'Screenshot is mandatory for verifying this payment' });
       }
       if (req.file) {
         payment.screenshot = req.file.path;
         payment.screenshotName = req.file.originalname;
       }
+      if (paymentMode && !['Direct Cash', 'Account'].includes(paymentMode)) {
+        return res.status(400).json({ success: false, message: 'Invalid payment mode' });
+      }
       payment.status = 'VERIFIED';
       payment.verified = true;
-      if (accountSubMode) payment.accountSubMode = accountSubMode;
+      if (paymentMode) payment.paymentMode = paymentMode;
+      payment.accountSubMode = verificationPaymentMode === 'Account' ? (accountSubMode || '') : '';
       booking.comments.push({
         senderName: `System / ${req.user.name}`,
         message: `Service Payment Verified: ${payment.paymentId} (₹${payment.paidAmount}) for service ${service.serviceId}`,
@@ -1879,7 +1940,7 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
     const service = booking.services.find(s => s.serviceId === req.params.serviceId);
     if (!service) return res.status(404).json({ success: false, message: 'Service not found' });
 
-    const { amount, details, paymentFrom, paymentTo, paymentMode, accountSubMode } = req.body;
+    const { amount, details, paymentFrom, paymentTo } = req.body;
     if (!amount || Number(amount) <= 0) {
       return res.status(400).json({ success: false, message: 'Amount is required' });
     }
@@ -1897,8 +1958,8 @@ router.post('/:id/services/:serviceId/generate-payment-id', protect, verifiedOnl
       paymentFrom: pFrom,
       paymentTo: pTo,
       paidAmount: Number(amount),
-      paymentMode: paymentMode || 'Account',
-      accountSubMode: accountSubMode || '',
+      paymentMode: 'Account',
+      accountSubMode: '',
       screenshot: '',
       screenshotName: '',
       status: 'VERIFICATION-REQUIRED',

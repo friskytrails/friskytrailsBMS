@@ -64,6 +64,8 @@ const AdminDashboard = () => {
     isServicePayment: false,
     serviceId: null,
     file: null,
+    paymentMode: '',
+    accountSubMode: '',
     loading: false
   });
 
@@ -283,6 +285,8 @@ const AdminDashboard = () => {
         isServicePayment,
         serviceId,
         file: null,
+        paymentMode: '',
+        accountSubMode: '',
         loading: false
       });
       return;
@@ -323,8 +327,27 @@ const AdminDashboard = () => {
     }
   };
 
+  const handlePasteScreenshot = (event) => {
+    const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith('image/'));
+    if (!imageItem) return;
+    event.preventDefault();
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+    const extension = blob.type.split('/')[1] || 'png';
+    const file = new File([blob], `payment-screenshot-${Date.now()}.${extension}`, { type: blob.type });
+    setScreenshotModal(prev => ({ ...prev, file }));
+  };
+
   const handleUploadAndVerify = async () => {
-    if (!screenshotModal.file) {
+    if (!screenshotModal.paymentMode) {
+      alert('Please select the payment mode.');
+      return;
+    }
+    if (screenshotModal.paymentMode === 'Account' && !screenshotModal.accountSubMode) {
+      alert('Please select the bank account.');
+      return;
+    }
+    if (screenshotModal.paymentMode === 'Account' && !screenshotModal.file) {
       alert('Please select a screenshot file first.');
       return;
     }
@@ -334,7 +357,9 @@ const AdminDashboard = () => {
     try {
       const formData = new FormData();
       formData.append('status', 'VERIFIED');
-      formData.append('screenshot', screenshotModal.file);
+      formData.append('paymentMode', screenshotModal.paymentMode);
+      formData.append('accountSubMode', screenshotModal.accountSubMode || '');
+      if (screenshotModal.file) formData.append('screenshot', screenshotModal.file);
       
       const url = `${API_BASE}/api/bookings/${screenshotModal.bookingObjectId}/services/${screenshotModal.serviceId}/payment/${screenshotModal.paymentId}/verify`;
       
@@ -349,7 +374,7 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== screenshotModal.paymentId && p._id !== screenshotModal.paymentId));
-        setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, loading: false });
+        setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', loading: false });
         setSuccessModal({ isOpen: true, message: 'Payment uploaded and verified successfully!' });
         fetchPendingPayments();
         fetchGeneratedIds();
@@ -1207,16 +1232,52 @@ Remark: ${remarkVal}`;
             <p className="text-slate-400 text-xs mb-4 leading-relaxed">
               This payment request requires a screenshot upload to be verified.
             </p>
-            <div className="space-y-4">
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => setScreenshotModal(prev => ({ ...prev, file: e.target.files[0] }))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
-              />
+            <div className="space-y-4" onPaste={handlePasteScreenshot} tabIndex={0}>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Payment Mode *</label>
+                <select
+                  required
+                  value={screenshotModal.paymentMode}
+                  onChange={(e) => setScreenshotModal(prev => ({ ...prev, paymentMode: e.target.value, accountSubMode: '' }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                >
+                  <option value="">Select payment mode</option>
+                  <option value="Account">Account</option>
+                  <option value="Direct Cash">Direct Cash</option>
+                </select>
+              </div>
+              {screenshotModal.paymentMode === 'Account' && <div>
+                <label className="block text-xs text-slate-400 mb-1">Bank Account *</label>
+                <select
+                  required
+                  value={screenshotModal.accountSubMode}
+                  onChange={(e) => setScreenshotModal(prev => ({ ...prev, accountSubMode: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                >
+                  <option value="">Select bank account</option>
+                  <option value="Kalpana BOI">Kalpana BOI</option>
+                  <option value="Kalpana PNB">Kalpana PNB</option>
+                  <option value="Babita AU">Babita AU</option>
+                  <option value="Hari Mohan BOB">Hari Mohan BOB</option>
+                  <option value="FT HDFC">FT HDFC</option>
+                  <option value="Pratyush SBI">Pratyush SBI</option>
+                </select>
+              </div>}
+              {screenshotModal.paymentMode === 'Account' && <>
+                <div className="rounded-lg border border-dashed border-indigo-500/40 bg-indigo-500/5 p-3 text-center text-xs text-slate-400">
+                  Choose a file below, or click this area and press Ctrl/Cmd + V to paste a screenshot.
+                  {screenshotModal.file && <div className="mt-1 text-emerald-400 truncate">{screenshotModal.file.name || 'Screenshot pasted'}</div>}
+                </div>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setScreenshotModal(prev => ({ ...prev, file: e.target.files[0] }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer"
+                />
+              </>}
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, loading: false })}
+                  onClick={() => setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', loading: false })}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors cursor-pointer"
                 >
                   Cancel

@@ -2563,6 +2563,8 @@ const BookingDetails = () => {
                   <option value="Hari Mohan BOB">Hari Mohan BOB</option>
                   <option value="FT HDFC">FT HDFC</option>
                   <option value="Pratyush SBI">Pratyush SBI</option>
+                  <option value="Supplier">Supplier</option>
+                  <option value="Others">Others</option>
                 </select>
               </div>
 
