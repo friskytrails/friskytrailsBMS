@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<title>Booking Confirmation | FriskyTrails</title>
+
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: #f4f4f4;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #171717;
+  }
+
+  table { border-collapse: collapse; }
+  img { border: 0; outline: none; text-decoration: none; }
+
+  .page {
+    width: 100%;
+    background: #f4f4f4;
+    padding: 30px 12px;
+  }
+
+  .email {
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 5px 25px rgba(0,0,0,.09);
+  }
+
+  /* ---------- BRAND HEADER ---------- */
+  .brand-header {
+    background: linear-gradient(135deg, #090909 0%, #171717 55%, #f36b21 100%);
+    padding: 28px 30px 30px;
+    text-align: center;
+  }
+
+  .logo {
+    max-width: 190px;
+    max-height: 65px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    padding: 32px 30px 26px;
+    text-align: center;
+    border-bottom: 1px solid #eeeeee;
+  }
+
+  .orange-line {
+    width: 52px;
+    height: 4px;
+    background: #f36b21;
+    border-radius: 10px;
+    margin: 0 auto 16px;
+  }
+
+  .hero-title {
+    margin: 0;
+    color: #111111;
+    font-size: 27px;
+    line-height: 1.25;
+    font-weight: 800;
+  }
+
+  .hero-subtitle {
+    margin: 10px auto 0;
+    max-width: 500px;
+    color: #6b6b6b;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ---------- SECTION ---------- */
+  .section {
+    padding: 28px 28px 0;
+  }
+
+  .section-title {
+    margin: 0 0 17px;
+    color: #111111;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .section-title span {
+    color: #f36b21;
+  }
+
+  /* ---------- BOOKING DETAILS: NEW LAYOUT ---------- */
+  .booking-card {
+    border: 1px solid #e9e9e9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .booking-row {
+    width: 100%;
+  }
+
+  .booking-row td {
+    padding: 14px 17px;
+    border-bottom: 1px solid #eeeeee;
+    vertical-align: middle;
+  }
+
+  .booking-row:last-child td {
+    border-bottom: 0;
+  }
+
+  .booking-label {
+    width: 34%;
+    color: #777777;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .booking-value {
+    color: #191919;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .booking-id {
+    color: #f36b21;
+    letter-spacing: .3px;
+  }
+
+  /* ---------- TRAVELLERS ---------- */
+  .traveller-card {
+    border: 1px solid #e9e9e9;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .traveller-table {
+    width: 100%;
+  }
+
+  .traveller-table th {
+    background: #111111;
+    color: #ffffff;
+    padding: 12px 13px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .traveller-table td {
+    padding: 12px 13px;
+    border-bottom: 1px solid #eeeeee;
+    color: #333333;
+    font-size: 12px;
+    line-height: 1.4;
+    vertical-align: top;
+  }
+
+  .traveller-table tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* ---------- PAYMENT ---------- */
+  .payment-section {
+    margin-top: 26px;
+    padding: 22px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #111111 0%, #242424 58%, #f36b21 180%);
+    color: #ffffff;
+  }
+
+  .payment-title {
+    margin: 0 0 14px;
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .payment-row td {
+    padding: 6px 0;
+    font-size: 13px;
+  }
+
+  .payment-label {
+    color: #dddddd;
+  }
+
+  .payment-value {
+    text-align: right;
+    color: #ffffff;
+    font-weight: 700;
+  }
+
+  .balance td {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,.22);
+  }
+
+  .balance .payment-value {
+    color: #ffb07a;
+    font-size: 16px;
+  }
+
+  /* ---------- POLICY BUTTON ---------- */
+  .policy-wrap {
+    padding: 25px 28px 8px;
+    text-align: center;
+  }
+
+  .policy-button {
+    display: inline-block;
+    background: #f36b21;
+    color: #ffffff !important;
+    text-decoration: none;
+    padding: 12px 24px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .policy-note {
+    margin: 10px 0 0;
+    color: #858585;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* ---------- IMPORTANT NOTE ---------- */
+  .important {
+    margin: 20px 28px 26px;
+    padding: 15px 17px;
+    background: #fff7f1;
+    border-left: 4px solid #f36b21;
+    border-radius: 7px;
+    color: #5e4637;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .important strong {
+    color: #111111;
+  }
+
+  /* ---------- FOOTER ---------- */
+  .footer {
+    background: #111111;
+    padding: 26px 25px;
+    text-align: center;
+  }
+
+  .footer-brand {
+    color: #ffffff;
+    font-size: 19px;
+    font-weight: 800;
+    margin-bottom: 8px;
+  }
+
+  .footer-tagline {
+    color: #f36b21;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  .footer-text {
+    color: #c9c9c9;
+    font-size: 11px;
+    line-height: 1.8;
+  }
+
+  .footer a {
+    color: #ffffff;
+    text-decoration: none;
+  }
+
+  .automated {
+    margin-top: 14px;
+    color: #888888;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  /* ---------- MOBILE ---------- */
+  @media only screen and (max-width: 600px) {
+    .page { padding: 0; }
+    .email {
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .brand-header { padding: 24px 18px; }
+    .hero { padding: 27px 18px 23px; }
+    .hero-title { font-size: 23px; }
+
+    .section { padding: 23px 14px 0; }
+
+    .booking-label {
+      width: 38%;
+    }
+
+    .booking-row td {
+      padding: 13px 12px;
+    }
+
+    .traveller-card {
+      overflow-x: auto;
+    }
+
+    .traveller-table {
+      min-width: 570px;
+    }
+
+    .payment-section {
+      margin-top: 22px;
+      padding: 19px;
+    }
+
+    .policy-wrap {
+      padding: 23px 14px 6px;
+    }
+
+    .important {
+      margin: 18px 14px 22px;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<table role="presentation" width="100%" class="page">
+<tr>
+<td align="center">
+
+<table role="presentation" width="680" class="email">
+
+  <!-- ================= HEADER ================= -->
+  <tr>
+    <td class="brand-header">
+      <!-- Replace {{logo_url}} with the public HTTPS URL of the FriskyTrails logo -->
+      <img src="{{logo_url}}" alt="FriskyTrails" class="logo">
+    </td>
+  </tr>
+
+  <!-- ================= HERO ================= -->
+  <tr>
+    <td class="hero">
+      <div class="orange-line"></div>
+      <h1 class="hero-title">Booking Confirmed!</h1>
+      <p class="hero-subtitle">
+        Thank you for choosing FriskyTrails. Your adventure is officially booked.
+        Please find your booking details below.
+      </p>
+    </td>
+  </tr>
+
+  <!-- ================= BOOKING DETAILS ================= -->
+  <tr>
+    <td class="section">
+
+      <h2 class="section-title"><span>Booking</span> Details Below</h2>
+
+      <table role="presentation" width="100%" class="booking-card">
+
+        <tr class="booking-row">
+          <td class="booking-label">Booking ID</td>
+          <td class="booking-value booking-id">{{booking_id}}</td>
+        </tr>
+
+        <tr class="booking-row">
+          <td class="booking-label">Booked On</td>
+          <td class="booking-value">{{booking_date}}</td>
+        </tr>
+
+        <tr class="booking-row">
+          <td class="booking-label">Package</td>
+          <td class="booking-value">{{package_name}}</td>
+        </tr>
+
+        <tr class="booking-row">
+          <td class="booking-label">Travellers</td>
+          <td class="booking-value">{{traveller_count}}</td>
+        </tr>
+
+        <tr class="booking-row">
+          <td class="booking-label">Start Date</td>
+          <td class="booking-value">{{start_date}}</td>
+        </tr>
+
+        <tr class="booking-row">
+          <td class="booking-label">End Date</td>
+          <td class="booking-value">{{end_date}}</td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+
+  <!-- ================= TRAVELLER DETAILS ================= -->
+  <tr>
+    <td class="section">
+
+      <h2 class="section-title"><span>Traveller</span> Details</h2>
+
+      <div class="traveller-card">
+        <table role="presentation" width="100%" class="traveller-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{traveller_rows}}
+          </tbody>
+        </table>
+      </div>
+
+    </td>
+  </tr>
+
+  <!-- ================= PAYMENT SUMMARY ================= -->
+  <tr>
+    <td class="section">
+
+      <div class="payment-section">
+        <h2 class="payment-title">Payment Summary</h2>
+
+        <table role="presentation" width="100%">
+
+          <tr class="payment-row">
+            <td class="payment-label">Total Package Cost</td>
+            <td class="payment-value">₹{{package_cost}}</td>
+          </tr>
+
+          <tr class="payment-row">
+            <td class="payment-label">Amount Paid</td>
+            <td class="payment-value">₹{{paid_amount}}</td>
+          </tr>
+
+          <tr class="payment-row balance">
+            <td class="payment-label">Balance Due</td>
+            <td class="payment-value">₹{{due_amount}}</td>
+          </tr>
+
+        </table>
+      </div>
+
+    </td>
+  </tr>
+
+  <!-- ================= POLICY BUTTON ================= -->
+  <tr>
+    <td class="policy-wrap">
+
+      <!-- Replace {{policy_url}} with your Payment & Cancellation Policy URL -->
+      <a href="{{policy_url}}" class="policy-button">
+        Payment &amp; Cancellation Policy
+      </a>
+
+      <p class="policy-note">
+        Please read the payment, cancellation and refund terms applicable to your booking.
+      </p>
+
+    </td>
+  </tr>
+
+  <!-- ================= IMPORTANT ================= -->
+  <tr>
+    <td>
+      <div class="important">
+        <strong>Important:</strong>
+        Please review your booking details and inform our team immediately if any information
+        needs to be corrected. Carry a valid ID proof such as an Aadhar Card during the trip,
+        as applicable.
+      </div>
+    </td>
+  </tr>
+
+  <!-- ================= FOOTER ================= -->
+  <tr>
+    <td class="footer">
+
+      <div class="footer-brand">FriskyTrails</div>
+
+      <div class="footer-tagline">
+        Say Hi To Nature.
+      </div>
+
+      <div class="footer-text">
+        Adventure Activities &amp; Tour Packages Across India<br><br>
+
+        <a href="https://www.friskytrails.in/">
+          www.friskytrails.in
+        </a>
+        &nbsp; | &nbsp;
+        <a href="mailto:contact@friskytrails.in">
+          contact@friskytrails.in
+        </a>
+        <br>
+
+        <a href="tel:9341770613">9341770613</a>
+        &nbsp; | &nbsp;
+        <a href="tel:7877979193">7877979193</a>
+      </div>
+
+      <div class="automated">
+        This is an automated booking confirmation email.
+      </div>
+
+    </td>
+  </tr>
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>

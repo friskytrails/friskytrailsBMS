@@ -33,6 +33,30 @@ const formatReceiptDateRange = (startDate, endDate) => {
   return start === 'N/A' ? 'N/A' : (end === 'N/A' || start === end ? start : `${start} to ${end}`);
 };
 
+function buildBookingConfirmationHtml(booking) {
+  const templatePath = path.resolve(__dirname, '../templates/FriskyTrails_Booking_Confirmation_Email_v2.html');
+  let html = fs.readFileSync(templatePath, 'utf8');
+  const adults = Number(booking.adults || 0);
+  const children = Number(booking.children || 0);
+  const travellerCount = `${adults} adult${adults === 1 ? '' : 's'}${children ? `, ${children} child${children === 1 ? '' : 'ren'}` : ''}`;
+  const travellerRows = `<tr><td>${escapeHtml(booking.travellerName || 'N/A')}</td><td>${escapeHtml(booking.travellerPhone || 'N/A')}</td><td>${escapeHtml(booking.travellerEmail || 'N/A')}</td></tr>`;
+  const values = {
+    logo_url: 'cid:friskytrails-logo',
+    booking_id: booking.bookingId || 'N/A',
+    booking_date: formatReceiptDate(booking.createdAt),
+    package_name: booking.packageName || 'N/A',
+    traveller_count: travellerCount,
+    start_date: formatReceiptDate(booking.startDate),
+    end_date: formatReceiptDate(booking.endDate),
+    traveller_rows: travellerRows,
+    package_cost: formatReceiptAmount(booking.totalAmount),
+    paid_amount: formatReceiptAmount(booking.paidAmount),
+    due_amount: formatReceiptAmount(booking.dueAmount),
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/',
+  };
+  return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => key === 'traveller_rows' ? values[key] : escapeHtml(values[key] ?? ''));
+}
+
 function buildPaymentReceiptHtml(booking, selectedPayment = null) {
   const templatePath = path.resolve(__dirname, '../templates/FriskyTrails_Payment_Receipt_Email_Updated.html');
   let html = fs.readFileSync(templatePath, 'utf8');
@@ -161,7 +185,7 @@ router.post('/:id/email', protect, verifiedOnly, async (req,res) => {
     const {subject,body,template}=req.body;
     if(!subject?.trim()||!body?.trim()) return res.status(400).json({success:false,message:'Subject and email message are required'});
     if(!booking.travellerEmail) return res.status(400).json({success:false,message:'This booking has no customer email address'});
-    const receiptHtml = template === 'payment-receipt' ? buildPaymentReceiptHtml(booking) : null;
+    const receiptHtml = template === 'payment-receipt' ? buildPaymentReceiptHtml(booking) : template === 'booking-confirmation' ? buildBookingConfirmationHtml(booking) : null;
     const mail = {
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
       to: booking.travellerEmail,
