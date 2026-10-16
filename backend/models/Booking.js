@@ -222,6 +222,17 @@ const BookingSchema = new mongoose.Schema({
       'Please add a valid email',
     ],
   },
+  // Primary customer contact remains separate from the payment receipt address.
+  receiptEmail: {
+    type: String,
+    lowercase: true,
+    trim: true,
+    match: [
+      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      'Please add a valid receipt email',
+    ],
+    default: '',
+  },
   travellerPhone: {
     type: String,
     required: [true, 'Please add a traveler phone number'],

@@ -14,6 +14,7 @@ const CreateBooking = ({ isEdit }) => {
   const [formData, setFormData] = useState({
     travellerName: '',
     travellerEmail: '',
+    receiptEmail: '',
     travellerPhone: '',
     startDate: '',
     endDate: '',
@@ -85,6 +86,7 @@ const CreateBooking = ({ isEdit }) => {
           setFormData({
             travellerName: b.travellerName || '',
             travellerEmail: b.travellerEmail || '',
+            receiptEmail: b.receiptEmail || '',
             travellerPhone: b.travellerPhone || '',
             startDate: b.startDate ? new Date(b.startDate).toISOString().split('T')[0] : '',
             endDate: b.endDate ? new Date(b.endDate).toISOString().split('T')[0] : '',
@@ -277,6 +279,7 @@ const CreateBooking = ({ isEdit }) => {
       const data = new FormData();
       data.append('travellerName', formData.travellerName);
       data.append('travellerEmail', formData.travellerEmail);
+      if (formData.receiptEmail.trim()) data.append('receiptEmail', formData.receiptEmail.trim());
       data.append('travellerPhone', formData.travellerPhone);
       data.append('startDate', formData.startDate);
       data.append('endDate', formData.endDate);
@@ -416,6 +419,16 @@ const CreateBooking = ({ isEdit }) => {
                     <span>{validationErrors.travellerEmail}</span>
                   </p>
                 )}
+              </div>
+
+              {/* Payment Receipt Email */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Payment Receipt Email</label>
+                <div className="relative rounded-md shadow-sm">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Mail className="h-4.5 w-4.5 text-slate-500" /></div>
+                  <input type="email" name="receiptEmail" value={formData.receiptEmail} onChange={handleInputChange} className={getInputClass('receiptEmail')} placeholder="receipt@example.com" />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">Used only for payment receipts. Leave blank to use the customer email.</p>
               </div>
 
               {/* Phone Number */}

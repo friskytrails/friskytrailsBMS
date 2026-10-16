@@ -33,11 +33,11 @@ const formatReceiptDateRange = (startDate, endDate) => {
   return start === 'N/A' ? 'N/A' : (end === 'N/A' || start === end ? start : `${start} to ${end}`);
 };
 
-function buildPaymentReceiptHtml(booking) {
+function buildPaymentReceiptHtml(booking, selectedPayment = null) {
   const templatePath = path.resolve(__dirname, '../templates/FriskyTrails_Payment_Receipt_Email_Updated.html');
   let html = fs.readFileSync(templatePath, 'utf8');
   const payments = (booking.payments || []).filter(payment => payment.status === 'VERIFIED');
-  const payment = [...payments].sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0]
+  const payment = selectedPayment || [...payments].sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0]
     || [...(booking.payments || [])].sort((a, b) => new Date(b.paymentDate || 0) - new Date(a.paymentDate || 0))[0]
     || null;
   const paymentAmount = payment?.amountPaid || 0;
@@ -200,6 +200,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       paymentMode,
       travellerName,
       travellerEmail,
+      receiptEmail,
       travellerPhone,
       adults,
       children,
@@ -247,6 +248,7 @@ router.post('/', protect, verifiedOnly, upload.single('screenshot'), async (req,
       screenshot: screenshotPath,
       travellerName,
       travellerEmail,
+      receiptEmail,
       travellerPhone,
       createdBy: req.user._id,
       status: 'Pending',
@@ -1056,7 +1058,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
 
       // Block all other field changes for employees
       const restrictedFields = ['packageName', 'location', 'totalAmount', 'gstAmount', 'paidAmount', 'transactionId',
-        'paymentMode', 'travellerName', 'travellerEmail', 'travellerPhone', 'adults', 'children',
+        'paymentMode', 'travellerName', 'travellerEmail', 'receiptEmail', 'travellerPhone', 'adults', 'children',
         'status', 'tripStatus', 'profitMargin', 'feedbackRating', 'feedbackComment'];
       const attemptedRestricted = restrictedFields.filter(f => req.body[f] !== undefined && req.body[f] !== '');
       if (attemptedRestricted.length > 0) {
@@ -1078,6 +1080,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
       if (travellerName) booking.travellerName = travellerName;
       if (travellerEmail) booking.travellerEmail = travellerEmail;
+      if (receiptEmail !== undefined) booking.receiptEmail = receiptEmail.trim();
       if (travellerPhone) booking.travellerPhone = travellerPhone;
 
       if (adults !== undefined) booking.adults = Number(adults);
@@ -1375,9 +1378,31 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
         return res.status(403).json({ success: false, message: 'Access denied' });
       }
 
+      const receiptRecipient = booking.receiptEmail || booking.travellerEmail;
+      if (!receiptRecipient) {
+        return res.status(400).json({ success: false, message: 'This booking has no receipt email address' });
+      }
+      const subject = `Payment Receipt - ${booking.bookingId} | Payment ${payment.paymentId}`;
+      const body = `Your FriskyTrails payment receipt is attached in this email.\n\nBooking ID: ${booking.bookingId}\nPayment ID: ${payment.paymentId}\nTraveller: ${booking.travellerName}`;
+      const mail = {
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: receiptRecipient,
+        subject,
+        text: body,
+        html: buildPaymentReceiptHtml(booking, payment),
+        attachments: [{ filename: 'logo.png', path: path.resolve(__dirname, '../templates/logo.png'), cid: 'friskytrails-logo' }],
+      };
+      await createMailTransporter().sendMail(mail);
+      try {
+        await saveToSentFolder(mail);
+      } catch (sentError) {
+        console.warn('Receipt sent, but saving a Sent copy failed:', sentError.message);
+      }
+      booking.emailHistory.push({ to: receiptRecipient, subject, body, sentBy: req.user._id, sentByName: req.user.name, sentAt: new Date() });
+
       booking.comments.push({
         senderName: 'System / Mailer',
-        message: `Payment Receipt Sent: Receipt for payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been successfully emailed to ${booking.travellerEmail}.`,
+        message: `Payment Receipt Sent: Receipt for payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been successfully emailed to ${receiptRecipient}.`,
         timestamp: new Date()
       });
     } else {

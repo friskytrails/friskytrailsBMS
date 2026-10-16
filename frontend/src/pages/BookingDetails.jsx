@@ -154,6 +154,7 @@ const BookingDetails = () => {
   const [isFullEditModalOpen, setIsFullEditModalOpen] = useState(false);
   const [fullEditName, setFullEditName] = useState('');
   const [fullEditEmail, setFullEditEmail] = useState('');
+  const [fullEditReceiptEmail, setFullEditReceiptEmail] = useState('');
   const [fullEditPhone, setFullEditPhone] = useState('');
   const [fullEditAdults, setFullEditAdults] = useState(1);
   const [fullEditChildren, setFullEditChildren] = useState(0);
@@ -745,6 +746,7 @@ const BookingDetails = () => {
   const openFullEditModal = () => {
     setFullEditName(booking.travellerName || '');
     setFullEditEmail(booking.travellerEmail || '');
+    setFullEditReceiptEmail(booking.receiptEmail || '');
     setFullEditPhone(booking.travellerPhone || '');
     setFullEditAdults(booking.adults || 1);
     setFullEditChildren(booking.children || 0);
@@ -788,6 +790,7 @@ const BookingDetails = () => {
     const payload = {
       travellerName: fullEditName.trim(),
       travellerEmail: fullEditEmail.trim(),
+      receiptEmail: fullEditReceiptEmail.trim(),
       travellerPhone: fullEditPhone.trim(),
       adults: Number(fullEditAdults),
       children: Number(fullEditChildren),
@@ -964,7 +967,7 @@ const BookingDetails = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Receipt successfully queued and emailed!');
+        alert(data.message || 'Receipt emailed successfully!');
         setBooking(data.data);
       } else {
         alert(data.message || 'Failed to send receipt');
@@ -1993,6 +1996,14 @@ const BookingDetails = () => {
                             </td>
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex flex-col md:flex-row items-center justify-center gap-1.5">
+                                <button
+                                  onClick={() => handleSendReceipt(p.paymentId)}
+                                  disabled={!booking.receiptEmail && !booking.travellerEmail}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#00A89E] hover:bg-[#008f87] disabled:opacity-50 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                  title={`Send receipt to ${booking.receiptEmail || booking.travellerEmail}`}
+                                >
+                                  <Mail className="w-3 h-3" /> Email
+                                </button>
                                 {user?.role === 'admin' && (
                                   <button
                                     onClick={() => openEditPayment(p)}
@@ -2776,6 +2787,13 @@ const BookingDetails = () => {
                       onChange={(e) => setFullEditEmail(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Payment Receipt Email
+                    </label>
+                    <input type="email" placeholder="Receipt Email (optional)" value={fullEditReceiptEmail} onChange={(e) => setFullEditReceiptEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 placeholder-slate-500 text-sm focus:outline-none transition-colors" />
                   </div>
 
                   <div>
