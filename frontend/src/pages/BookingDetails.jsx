@@ -134,6 +134,8 @@ const BookingDetails = () => {
 
   const [formError, setFormError] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [sendingReceiptPaymentId, setSendingReceiptPaymentId] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // Payment Table Source Filter State
   const [paymentSourceFilter, setPaymentSourceFilter] = useState('ALL');
@@ -955,7 +957,14 @@ const BookingDetails = () => {
     }
   };
 
+  const showToast = (type, text) => {
+    setToast({ type, text });
+    window.setTimeout(() => setToast(null), 3500);
+  };
+
   const handleSendReceipt = async (paymentId) => {
+    if (sendingReceiptPaymentId) return;
+    setSendingReceiptPaymentId(paymentId);
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/verify-payment/${paymentId}`, {
         method: 'PATCH',
@@ -967,14 +976,16 @@ const BookingDetails = () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message || 'Receipt emailed successfully!');
+        showToast('success', data.message || 'Receipt emailed successfully!');
         setBooking(data.data);
       } else {
-        alert(data.message || 'Failed to send receipt');
+        showToast('error', data.message || 'Failed to send receipt');
       }
     } catch (err) {
       console.error('Send receipt error:', err);
-      alert('Network error while sending receipt');
+      showToast('error', 'Network error while sending receipt');
+    } finally {
+      setSendingReceiptPaymentId(null);
     }
   };
 
@@ -1285,6 +1296,7 @@ const BookingDetails = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-10 px-4 sm:px-6 lg:px-8">
+      {toast && <div className={`fixed right-5 top-5 z-50 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-2xl ${toast.type === 'success' ? 'border-emerald-500/30 bg-emerald-950 text-emerald-300' : 'border-rose-500/30 bg-rose-950 text-rose-300'}`}>{toast.type === 'success' ? <CheckCheck className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}{toast.text}</div>}
       <div className="max-w-7xl mx-auto animate-fadeIn font-sans space-y-8">
 
         {/* 1. Header & Primary Info Bar */}
@@ -1998,11 +2010,11 @@ const BookingDetails = () => {
                               <div className="flex flex-col md:flex-row items-center justify-center gap-1.5">
                                 <button
                                   onClick={() => handleSendReceipt(p.paymentId)}
-                                  disabled={!booking.receiptEmail && !booking.travellerEmail}
+                                  disabled={sendingReceiptPaymentId === p.paymentId || (!booking.receiptEmail && !booking.travellerEmail)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#00A89E] hover:bg-[#008f87] disabled:opacity-50 text-white rounded text-[10px] font-bold uppercase transition-colors cursor-pointer"
                                   title={`Send receipt to ${booking.receiptEmail || booking.travellerEmail}`}
                                 >
-                                  <Mail className="w-3 h-3" /> Email
+                                  {sendingReceiptPaymentId === p.paymentId ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Mail className="w-3 h-3" />} {sendingReceiptPaymentId === p.paymentId ? 'Sending' : 'Email'}
                                 </button>
                                 {user?.role === 'admin' && (
                                   <button
