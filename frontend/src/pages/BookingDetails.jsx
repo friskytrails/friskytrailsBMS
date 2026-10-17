@@ -789,10 +789,11 @@ const BookingDetails = () => {
       return;
     }
 
+    const receiptEmail = fullEditReceiptEmail.trim();
     const payload = {
       travellerName: fullEditName.trim(),
       travellerEmail: fullEditEmail.trim(),
-      receiptEmail: fullEditReceiptEmail.trim(),
+      receiptEmail,
       travellerPhone: fullEditPhone.trim(),
       adults: Number(fullEditAdults),
       children: Number(fullEditChildren),
