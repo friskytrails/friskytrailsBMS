@@ -424,7 +424,7 @@ BookingSchema.pre('validate', async function (next) {
       const verifiedPaymentsSum = (s.payments || [])
         .filter(p => p.status === 'VERIFIED')
         .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
-      s.totalDue = Math.max(0, (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum);
+      s.totalDue = (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum;
     });
   }
 
@@ -507,7 +507,7 @@ BookingSchema.post('init', function (doc) {
       const verifiedPaymentsSum = (s.payments || [])
         .filter(p => p.status === 'VERIFIED')
         .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
-      s.totalDue = Math.max(0, (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum);
+      s.totalDue = (s.b2bCost || 0) - (s.collectionBySupplier || 0) - verifiedPaymentsSum;
     });
   }
 

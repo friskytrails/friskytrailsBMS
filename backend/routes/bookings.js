@@ -52,7 +52,7 @@ function buildBookingConfirmationHtml(booking) {
     package_cost: formatReceiptAmount(booking.totalAmount),
     paid_amount: formatReceiptAmount(booking.paidAmount),
     due_amount: formatReceiptAmount(booking.dueAmount),
-    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/',
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-cancellation',
   };
   return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => key === 'traveller_rows' ? values[key] : escapeHtml(values[key] ?? ''));
 }
@@ -87,7 +87,7 @@ function buildPaymentReceiptHtml(booking, selectedPayment = null) {
     previous_paid_amount: formatReceiptAmount(previousPaid),
     total_paid_amount: formatReceiptAmount(totalPaid),
     due_amount: formatReceiptAmount(booking.dueAmount),
-    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/'
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-cancellation'
   };
   return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => escapeHtml(values[key] ?? ''));
 }
@@ -1295,13 +1295,14 @@ router.put('/:id/edit-payment/:paymentId', protect, verifiedOnly, upload.single(
     const payment = booking.payments[paymentIndex];
     const { amountPaid, paymentMode, paymentDate, paymentFrom, paymentTo, details, status, attachmentName, supplierId } = req.body;
 
-    // Recalculate paidAmount
+    // Allow admins to correct a payment amount. The Booking pre-validate hook
+    // recalculates paidAmount and dueAmount from verified payment entries.
     if (amountPaid !== undefined) {
-      const oldAmount = payment.amountPaid;
       const newAmount = Number(amountPaid);
-      if (oldAmount !== newAmount) {
-        return res.status(400).json({ success: false, message: 'Paid amount cannot be modified once added.' });
+      if (!Number.isFinite(newAmount) || newAmount <= 0) {
+        return res.status(400).json({ success: false, message: 'Paid amount must be a positive number.' });
       }
+      payment.amountPaid = newAmount;
     }
 
     if (paymentMode) payment.paymentMode = paymentMode;
@@ -1422,13 +1423,20 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       } catch (sentError) {
         console.warn('Receipt sent, but saving a Sent copy failed:', sentError.message);
       }
-      booking.emailHistory.push({ to: receiptRecipient, subject, body, sentBy: req.user._id, sentByName: req.user.name, sentAt: new Date() });
-
-      booking.comments.push({
-        senderName: 'System / Mailer',
-        message: `Payment Receipt Sent: Receipt for payment ID ${payment.paymentId} (Amount: ₹${payment.amountPaid}) has been successfully emailed to ${receiptRecipient}.`,
-        timestamp: new Date()
-      });
+      const sentAt = new Date();
+      await Booking.updateOne(
+        { _id: booking._id },
+        {
+          $push: {
+            emailHistory: { to: receiptRecipient, subject, body, sentBy: req.user._id, sentByName: req.user.name, sentAt },
+            comments: {
+              senderName: 'System / Mailer',
+              message: 'Payment Receipt Sent: Receipt for payment ID ' + payment.paymentId + ' (Amount: ₹' + payment.amountPaid + ') has been successfully emailed to ' + receiptRecipient + '.',
+              timestamp: sentAt
+            }
+          }
+        }
+      );
     } else {
       // Verification status change requires admin privilege
       if (req.user.role !== 'admin') {
@@ -1502,7 +1510,7 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       }
     }
 
-    await booking.save();
+    if (action !== 'send-receipt') await booking.save();
 
     const updatedBooking = await Booking.findById(booking._id)
       .populate('createdBy', 'name email')
@@ -1664,7 +1672,7 @@ router.post('/:id/services', protect, verifiedOnly, async (req, res) => {
       supplierSupplierId: supplierSupplierId || '',
       b2bCost: b2b,
       collectionBySupplier: collection,
-      totalDue: Math.max(0, b2b - collection),
+      totalDue: b2b - collection,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       adults: Number(adults) || 0,
@@ -1758,7 +1766,7 @@ router.put('/:id/services/:serviceId', protect, verifiedOnly, async (req, res) =
     const verifiedPaymentsSum = (service.payments || [])
       .filter(p => p.status === 'VERIFIED')
       .reduce((sum, p) => sum + (p.paidAmount || 0), 0);
-    service.totalDue = Math.max(0, service.b2bCost - service.collectionBySupplier - verifiedPaymentsSum);
+    service.totalDue = service.b2bCost - service.collectionBySupplier - verifiedPaymentsSum;
     if (startDate !== undefined) service.startDate = startDate || undefined;
     if (endDate !== undefined) service.endDate = endDate || undefined;
     if (adults !== undefined) service.adults = Number(adults) || 0;

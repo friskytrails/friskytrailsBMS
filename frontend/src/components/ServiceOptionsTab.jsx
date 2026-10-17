@@ -579,7 +579,7 @@ Remark: ${remarkVal}`;
               
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Total Due</label>
-                <input type="number" disabled value={Math.max(0, (Number(formData.b2bCost) || 0) - (Number(formData.collectionBySupplier) || 0))} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-400 text-sm font-bold" />
+                <input type="number" disabled value={(Number(formData.b2bCost) || 0) - (Number(formData.collectionBySupplier) || 0)} className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-slate-400 text-sm font-bold" />
               </div>
 
               <div>
@@ -860,7 +860,7 @@ Remark: ${remarkVal}`;
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-500 mb-1">Total Due</label>
-                          <input type="number" disabled value={Math.max(0, (Number(editFormData.b2bCost) || 0) - (Number(editFormData.collectionBySupplier) || 0))} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-400 font-bold" />
+                          <input type="number" disabled value={(Number(editFormData.b2bCost) || 0) - (Number(editFormData.collectionBySupplier) || 0)} className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-2 text-sm text-slate-400 font-bold" />
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-500 mb-1">Adults</label>
