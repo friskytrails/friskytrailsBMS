@@ -1054,6 +1054,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       paymentMode,
       travellerName,
       travellerEmail,
+      receiptEmail,
       travellerPhone,
       adults,
       children,
