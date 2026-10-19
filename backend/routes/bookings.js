@@ -52,7 +52,7 @@ function buildBookingConfirmationHtml(booking) {
     package_cost: formatReceiptAmount(booking.totalAmount),
     paid_amount: formatReceiptAmount(booking.paidAmount),
     due_amount: formatReceiptAmount(booking.dueAmount),
-    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-cancellation',
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-and-cancellation-policy',
   };
   return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => key === 'traveller_rows' ? values[key] : escapeHtml(values[key] ?? ''));
 }
@@ -87,7 +87,7 @@ function buildPaymentReceiptHtml(booking, selectedPayment = null) {
     previous_paid_amount: formatReceiptAmount(previousPaid),
     total_paid_amount: formatReceiptAmount(totalPaid),
     due_amount: formatReceiptAmount(booking.dueAmount),
-    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-cancellation'
+    policy_url: process.env.FRISKYTRAILS_POLICY_URL || 'https://www.friskytrails.in/payment-and-cancellation-policy'
   };
   return html.replace(/{{\s*([a-z_]+)\s*}}/gi, (_, key) => escapeHtml(values[key] ?? ''));
 }
