@@ -1282,6 +1282,22 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
   });
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasSupplierAccountOption = (
+    (data.paymentFrom === 'Traveller' && data.paymentTo === 'Supplier') ||
+    (data.paymentFrom === 'Supplier' && data.paymentTo === 'Traveller')
+  );
+
+  const handlePaymentPartyChange = (field, value) => {
+    const nextData = { ...data, [field]: value };
+    const nextHasSupplierAccountOption = (
+      (nextData.paymentFrom === 'Traveller' && nextData.paymentTo === 'Supplier') ||
+      (nextData.paymentFrom === 'Supplier' && nextData.paymentTo === 'Traveller')
+    );
+    if (!nextHasSupplierAccountOption && nextData.accountSubMode === 'Supplier') {
+      nextData.accountSubMode = '';
+    }
+    setData(nextData);
+  };
 
   const handlePasteImage = (event) => {
     const imageItem = [...(event.clipboardData?.items || [])].find(item => item.type.startsWith("image/"));
@@ -1321,7 +1337,7 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">From</label>
-              <select value={data.paymentFrom} onChange={e => setData({...data, paymentFrom: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
+              <select value={data.paymentFrom} onChange={e => handlePaymentPartyChange('paymentFrom', e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
                 <option value="Company">Company</option>
                 <option value="Traveller">Traveller</option>
                 <option value="Supplier">Supplier</option>
@@ -1329,7 +1345,7 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">To</label>
-              <select value={data.paymentTo} onChange={e => setData({...data, paymentTo: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
+              <select value={data.paymentTo} onChange={e => handlePaymentPartyChange('paymentTo', e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-slate-100">
                 <option value="Supplier">Supplier</option>
                 <option value="Company">Company</option>
                 <option value="Traveller">Traveller</option>
@@ -1354,6 +1370,7 @@ const PaymentModal = ({ service, onClose, onSubmit }) => {
                 <option value="Hari Mohan BOB">Hari Mohan BOB</option>
                 <option value="FT HDFC">FT HDFC</option>
                 <option value="Pratyush SBI">Pratyush SBI</option>
+                {hasSupplierAccountOption && <option value="Supplier">Supplier</option>}
               </select>
             </div>
           )}

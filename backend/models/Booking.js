@@ -192,6 +192,11 @@ const BookingSchema = new mongoose.Schema({
     min: [0, 'Paid amount cannot be negative'],
     default: 0,
   },
+  refundAmount: {
+    type: Number,
+    min: [0, 'Refund amount cannot be negative'],
+    default: 0,
+  },
   dueAmount: {
     type: Number,
     required: [true, 'Due amount is required'],
@@ -383,6 +388,48 @@ function ensureTasksChecklist(doc) {
   }
 }
 
+function isFthdcPaymentMode(paymentMode) {
+  // Support both the stored/displayed form ("FT HDFC") and the requested
+  // shorthand ("FTHDC").
+  const normalizedMode = String(paymentMode || '').toUpperCase().replace(/\s+/g, '');
+  return normalizedMode === 'FTHDC' || normalizedMode === 'FTHDFC';
+}
+
+function updateFthdcGstAmount(doc) {
+  const receivedAmount = (doc.payments || [])
+    .filter(payment => (
+      payment.status === 'VERIFIED' &&
+      payment.paymentFrom === 'TRAVELER' &&
+      payment.paymentTo === 'COMPANY' &&
+      isFthdcPaymentMode(payment.paymentMode)
+    ))
+    .reduce((sum, payment) => sum + (Number(payment.amountPaid) || 0), 0);
+
+  if (receivedAmount > 0) {
+    // GST is inclusive in the received amount: received - (received * 100 / 105).
+    doc.gstAmount = receivedAmount - (receivedAmount * (100 / 105));
+  }
+}
+
+function updateProfitMargin(doc) {
+  const refundTripStatuses = [
+    'Postponed',
+    'Cash Refund',
+    'Wallet Refund',
+    'No Refund',
+    'Cash Refund Done',
+    'Wallet Refund Done',
+  ];
+  const revenue = refundTripStatuses.includes(doc.tripStatus)
+    ? (doc.paidAmount || 0)
+    : (doc.totalAmount || 0);
+  const serviceOption = (doc.services || [])
+    .filter(service => service.serviceStatus !== 'Cancelled No Charges')
+    .reduce((sum, service) => sum + (service.b2bCost || 0), 0);
+
+  doc.profitMargin = revenue - serviceOption - (doc.refundAmount || 0);
+}
+
 // Auto-generate Booking ID and calculate due amount pre-validation
 BookingSchema.pre('validate', async function (next) {
   // Booked was a legacy booking status; normalize it to the single approval state.
@@ -428,11 +475,9 @@ BookingSchema.pre('validate', async function (next) {
     });
   }
 
-  // Calculate Profit Margin: package total excluding GST, minus active service costs
-  const activeB2BCost = (this.services || [])
-    .filter(s => s.serviceStatus !== 'Cancelled No Charges')
-    .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
-  this.profitMargin = (this.totalAmount || 0) - (this.gstAmount || 0) - activeB2BCost;
+  updateFthdcGstAmount(this);
+
+  updateProfitMargin(this);
 
   // Generate Booking ID if not exists
   if (!this.bookingId) {
@@ -512,10 +557,7 @@ BookingSchema.post('init', function (doc) {
   }
 
   // Recalculate Profit Margin dynamically
-  const activeB2BCost = (doc.services || [])
-    .filter(s => s.serviceStatus !== 'Cancelled No Charges')
-    .reduce((sum, s) => sum + (s.b2bCost || 0), 0);
-  doc.profitMargin = (doc.totalAmount || 0) - (doc.gstAmount || 0) - activeB2BCost;
+  updateProfitMargin(doc);
 });
 
 BookingSchema.index({ travellerName: 1 });

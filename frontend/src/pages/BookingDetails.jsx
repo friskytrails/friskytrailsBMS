@@ -166,6 +166,7 @@ const BookingDetails = () => {
   const [fullEditEndDate, setFullEditEndDate] = useState('');
   const [fullEditTotalAmount, setFullEditTotalAmount] = useState('');
   const [fullEditGstAmount, setFullEditGstAmount] = useState('');
+  const [fullEditRefundAmount, setFullEditRefundAmount] = useState('');
 
 
   useEffect(() => {
@@ -758,6 +759,7 @@ const BookingDetails = () => {
     setFullEditEndDate(booking.endDate ? new Date(booking.endDate).toISOString().split('T')[0] : '');
     setFullEditTotalAmount(booking.totalAmount || '');
     setFullEditGstAmount(booking.gstAmount || 0);
+    setFullEditRefundAmount(booking.refundAmount || 0);
     setFormError('');
     setIsFullEditModalOpen(true);
   };
@@ -803,6 +805,7 @@ const BookingDetails = () => {
       endDate: fullEditEndDate,
       totalAmount: Number(fullEditTotalAmount),
       gstAmount: Number(fullEditGstAmount) || 0,
+      refundAmount: Number(fullEditRefundAmount) || 0,
     };
 
     await handleSaveBookingFields(payload, () => {
@@ -1277,6 +1280,7 @@ const BookingDetails = () => {
   const totalAmount = booking.totalAmount || 0;
   const gstAmount = booking.gstAmount || 0;
   const paidAmount = booking.paidAmount || 0;
+  const refundAmount = booking.refundAmount || 0;
   const dueAmount = booking.dueAmount || 0;
   const profitMargin = booking.profitMargin || 0;
   const paidPercent = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 105) > 100 ? 100 : Math.round((paidAmount / totalAmount) * 100) : 0;
@@ -1900,7 +1904,7 @@ const BookingDetails = () => {
                   </div>
                   <div className="hidden md:block h-6 w-px bg-slate-800 mx-1"></div>
                   <div className="text-[10px] font-medium text-slate-400 leading-normal">
-                    Formula: <span className="text-slate-300 font-semibold font-mono">₹{totalAmount.toLocaleString()}</span> (Pkg) - <span className="text-slate-300 font-semibold font-mono">₹{gstAmount.toLocaleString()}</span> (GST) - <span className="text-slate-300 font-semibold font-mono">₹{((booking.services || []).filter(s => s.serviceStatus !== 'Cancelled No Charges').reduce((sum, s) => sum + (s.b2bCost || 0), 0)).toLocaleString()}</span> (B2B Costs)
+                    Formula: <span className="text-slate-300 font-semibold font-mono">₹{['Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'].includes(booking.tripStatus) ? paidAmount.toLocaleString() : totalAmount.toLocaleString()}</span> ({['Postponed', 'Cash Refund', 'Wallet Refund', 'No Refund', 'Cash Refund Done', 'Wallet Refund Done'].includes(booking.tripStatus) ? 'Paid' : 'Total'}) - <span className="text-slate-300 font-semibold font-mono">₹{((booking.services || []).filter(s => s.serviceStatus !== 'Cancelled No Charges').reduce((sum, s) => sum + (s.b2bCost || 0), 0)).toLocaleString()}</span> (Service Options) - <span className="text-slate-300 font-semibold font-mono">₹{refundAmount.toLocaleString()}</span> (Refund)
                   </div>
                 </div>
               </div>
@@ -2939,6 +2943,19 @@ const BookingDetails = () => {
                       placeholder="GST Amount"
                       value={fullEditGstAmount}
                       onChange={(e) => setFullEditGstAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
+                      Refund Amount
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Refund Amount"
+                      value={fullEditRefundAmount}
+                      onChange={(e) => setFullEditRefundAmount(Math.max(0, parseFloat(e.target.value) || 0))}
                       className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
                     />
                   </div>

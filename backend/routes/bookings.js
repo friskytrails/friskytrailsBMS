@@ -67,21 +67,14 @@ function buildPaymentReceiptHtml(booking, selectedPayment = null) {
   const paymentAmount = payment?.amountPaid || 0;
   const totalPaid = Number(booking.paidAmount || 0);
   const previousPaid = Math.max(totalPaid - paymentAmount, 0);
-  const paymentMode = payment?.paymentMode === 'Account' && payment?.accountSubMode
-    ? payment.accountSubMode
-    : (payment?.paymentMode || 'N/A');
   const values = {
     logo_url: 'cid:friskytrails-logo',
     package_name: booking.packageName || 'FriskyTrails Booking',
     booking_id: booking.bookingId || 'N/A',
-    payment_id: payment?.paymentId || 'N/A',
-    location: booking.location || 'N/A',
     travel_dates: formatReceiptDateRange(booking.startDate, booking.endDate),
     participants: `${Number(booking.adults || 0)} adult${Number(booking.adults || 0) === 1 ? '' : 's'}${Number(booking.children || 0) ? `, ${booking.children} child${Number(booking.children) === 1 ? '' : 'ren'}` : ''}`,
     payment_date: formatReceiptDate(payment?.paymentDate),
     primary_traveller_name: booking.travellerName || 'N/A',
-    payment_mode: paymentMode,
-    payment_reference: payment?.details || 'N/A',
     payment_amount: formatReceiptAmount(paymentAmount),
     package_cost: formatReceiptAmount(booking.totalAmount),
     previous_paid_amount: formatReceiptAmount(previousPaid),
@@ -1061,6 +1054,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       status,
       tripStatus,
       profitMargin,
+      refundAmount,
       feedbackRating,
       feedbackComment,
     } = req.body;
@@ -1084,7 +1078,7 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       // Block all other field changes for employees
       const restrictedFields = ['packageName', 'location', 'totalAmount', 'gstAmount', 'paidAmount', 'transactionId',
         'paymentMode', 'travellerName', 'travellerEmail', 'receiptEmail', 'travellerPhone', 'adults', 'children',
-        'status', 'tripStatus', 'profitMargin', 'feedbackRating', 'feedbackComment'];
+        'status', 'tripStatus', 'profitMargin', 'refundAmount', 'feedbackRating', 'feedbackComment'];
       const attemptedRestricted = restrictedFields.filter(f => req.body[f] !== undefined && req.body[f] !== '');
       if (attemptedRestricted.length > 0) {
         return res.status(403).json({
@@ -1101,6 +1095,13 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
       if (gstAmount !== undefined) booking.gstAmount = Number(gstAmount) || 0;
       if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
+      if (refundAmount !== undefined) {
+        const parsedRefundAmount = Number(refundAmount);
+        if (!Number.isFinite(parsedRefundAmount) || parsedRefundAmount < 0) {
+          return res.status(400).json({ success: false, message: 'Refund amount cannot be negative.' });
+        }
+        booking.refundAmount = parsedRefundAmount;
+      }
       if (transactionId) booking.transactionId = transactionId;
       if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
       if (travellerName) booking.travellerName = travellerName;
@@ -1408,8 +1409,8 @@ router.patch('/:id/verify-payment/:paymentId', protect, verifiedOnly, async (req
       if (!receiptRecipient) {
         return res.status(400).json({ success: false, message: 'This booking has no receipt email address' });
       }
-      const subject = `Payment Receipt - ${booking.bookingId} | Payment ${payment.paymentId}`;
-      const body = `Your FriskyTrails payment receipt is attached in this email.\n\nBooking ID: ${booking.bookingId}\nPayment ID: ${payment.paymentId}\nTraveller: ${booking.travellerName}`;
+      const subject = `Payment Receipt - ${booking.bookingId}`;
+      const body = `Your FriskyTrails payment receipt is attached in this email.\n\nBooking ID: ${booking.bookingId}\nTraveller: ${booking.travellerName}`;
       const mail = {
         from: process.env.SMTP_FROM || process.env.SMTP_USER,
         to: receiptRecipient,
