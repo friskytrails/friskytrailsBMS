@@ -66,6 +66,7 @@ const AdminDashboard = () => {
     file: null,
     paymentMode: '',
     accountSubMode: '',
+    paymentDate: '',
     loading: false
   });
 
@@ -287,6 +288,7 @@ const AdminDashboard = () => {
         file: null,
         paymentMode: '',
         accountSubMode: '',
+        paymentDate: paymentObj?.paymentDate ? new Date(paymentObj.paymentDate).toISOString().slice(0, 10) : '',
         loading: false
       });
       return;
@@ -339,6 +341,10 @@ const AdminDashboard = () => {
   };
 
   const handleUploadAndVerify = async () => {
+    if (!screenshotModal.paymentDate) {
+      alert('Please select the payment date.');
+      return;
+    }
     if (!screenshotModal.paymentMode) {
       alert('Please select the payment mode.');
       return;
@@ -359,6 +365,7 @@ const AdminDashboard = () => {
       formData.append('status', 'VERIFIED');
       formData.append('paymentMode', screenshotModal.paymentMode);
       formData.append('accountSubMode', screenshotModal.accountSubMode || '');
+      formData.append('paymentDate', screenshotModal.paymentDate);
       if (screenshotModal.file) formData.append('screenshot', screenshotModal.file);
       
       const url = `${API_BASE}/api/bookings/${screenshotModal.bookingObjectId}/services/${screenshotModal.serviceId}/payment/${screenshotModal.paymentId}/verify`;
@@ -374,7 +381,7 @@ const AdminDashboard = () => {
       const data = await res.json();
       if (data.success) {
         setPendingPayments(prev => prev.filter(p => p.paymentId !== screenshotModal.paymentId && p._id !== screenshotModal.paymentId));
-        setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', loading: false });
+        setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', paymentDate: '', loading: false });
         setSuccessModal({ isOpen: true, message: 'Payment uploaded and verified successfully!' });
         fetchPendingPayments();
         fetchGeneratedIds();
@@ -1234,6 +1241,16 @@ Remark: ${remarkVal}`;
             </p>
             <div className="space-y-4" onPaste={handlePasteScreenshot} tabIndex={0}>
               <div>
+                <label className="block text-xs text-slate-400 mb-1">Payment Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={screenshotModal.paymentDate}
+                  onChange={(e) => setScreenshotModal(prev => ({ ...prev, paymentDate: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                />
+              </div>
+              <div>
                 <label className="block text-xs text-slate-400 mb-1">Payment Mode *</label>
                 <select
                   required
@@ -1277,7 +1294,7 @@ Remark: ${remarkVal}`;
               </>}
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', loading: false })}
+                  onClick={() => setScreenshotModal({ isOpen: false, bookingObjectId: null, paymentId: null, isServicePayment: false, serviceId: null, file: null, paymentMode: '', accountSubMode: '', paymentDate: '', loading: false })}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors cursor-pointer"
                 >
                   Cancel

@@ -1053,8 +1053,6 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       children,
       status,
       tripStatus,
-      profitMargin,
-      refundAmount,
       feedbackRating,
       feedbackComment,
     } = req.body;
@@ -1095,13 +1093,6 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (totalAmount !== undefined) booking.totalAmount = Number(totalAmount);
       if (gstAmount !== undefined) booking.gstAmount = Number(gstAmount) || 0;
       if (paidAmount !== undefined) booking.paidAmount = Number(paidAmount);
-      if (refundAmount !== undefined) {
-        const parsedRefundAmount = Number(refundAmount);
-        if (!Number.isFinite(parsedRefundAmount) || parsedRefundAmount < 0) {
-          return res.status(400).json({ success: false, message: 'Refund amount cannot be negative.' });
-        }
-        booking.refundAmount = parsedRefundAmount;
-      }
       if (transactionId) booking.transactionId = transactionId;
       if (paymentMode && booking.payments?.length) booking.payments[0].paymentMode = paymentMode;
       if (travellerName) booking.travellerName = travellerName;
@@ -1113,7 +1104,6 @@ router.put('/:id/edit', protect, verifiedOnly, upload.single('screenshot'), asyn
       if (children !== undefined) booking.children = Number(children);
       if (status) booking.status = status;
       if (tripStatus) booking.tripStatus = tripStatus;
-      if (profitMargin !== undefined) booking.profitMargin = Number(profitMargin);
       if (feedbackRating !== undefined) booking.feedbackRating = Number(feedbackRating);
       if (feedbackComment !== undefined) booking.feedbackComment = feedbackComment;
     }
@@ -1937,7 +1927,14 @@ router.patch('/:id/services/:serviceId/payment/:paymentId/verify', protect, veri
     const payment = service.payments.find(p => p.paymentId === req.params.paymentId);
     if (!payment) return res.status(404).json({ success: false, message: 'Payment not found' });
 
-    const { status, reason, paymentMode, accountSubMode } = req.body;
+    const { status, reason, paymentMode, accountSubMode, paymentDate } = req.body;
+    if (paymentDate) {
+      const parsedPaymentDate = new Date(paymentDate);
+      if (Number.isNaN(parsedPaymentDate.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid payment date.' });
+      }
+      payment.paymentDate = parsedPaymentDate;
+    }
     const verificationPaymentMode = paymentMode || payment.paymentMode;
     const isDirectCash = verificationPaymentMode === 'Direct Cash';
     if (status === 'VERIFIED') {

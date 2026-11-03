@@ -143,8 +143,6 @@ const BookingDetails = () => {
   // Service Payment Filter State
   const [servicePaymentFilter, setServicePaymentFilter] = useState('ALL');
 
-  // Profit Margin State
-  const [profitMarginInput, setProfitMarginInput] = useState(0);
   const [togglingTaskId, setTogglingTaskId] = useState(null);
 
   // --- Status Comment Modal States ---
@@ -166,7 +164,6 @@ const BookingDetails = () => {
   const [fullEditEndDate, setFullEditEndDate] = useState('');
   const [fullEditTotalAmount, setFullEditTotalAmount] = useState('');
   const [fullEditGstAmount, setFullEditGstAmount] = useState('');
-  const [fullEditRefundAmount, setFullEditRefundAmount] = useState('');
 
 
   useEffect(() => {
@@ -180,7 +177,6 @@ const BookingDetails = () => {
         const data = await res.json();
         if (data.success) {
           setBooking(data.data);
-          setProfitMarginInput(data.data.profitMargin || 0);
         } else if (res.status === 403) {
           setAccessDenied(true);
           setAccessDeniedMessage(data.message || 'You do not have access to view this booking.');
@@ -759,7 +755,6 @@ const BookingDetails = () => {
     setFullEditEndDate(booking.endDate ? new Date(booking.endDate).toISOString().split('T')[0] : '');
     setFullEditTotalAmount(booking.totalAmount || '');
     setFullEditGstAmount(booking.gstAmount || 0);
-    setFullEditRefundAmount(booking.refundAmount || 0);
     setFormError('');
     setIsFullEditModalOpen(true);
   };
@@ -805,7 +800,6 @@ const BookingDetails = () => {
       endDate: fullEditEndDate,
       totalAmount: Number(fullEditTotalAmount),
       gstAmount: Number(fullEditGstAmount) || 0,
-      refundAmount: Number(fullEditRefundAmount) || 0,
     };
 
     await handleSaveBookingFields(payload, () => {
@@ -1083,25 +1077,6 @@ const BookingDetails = () => {
       alert('Connection error while saving feedback');
     } finally {
       setSavingFeedback(false);
-    }
-  };
-
-  const handleProfitMarginSave = async (val) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/edit`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ profitMargin: Number(val) }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBooking(data.data);
-      }
-    } catch (err) {
-      console.error('Error saving profit margin:', err);
     }
   };
 
@@ -1799,6 +1774,11 @@ const BookingDetails = () => {
                         <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${dueAmount === 0 ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>{duePercent}%</span>
                       </div>
                       <span className={`text-xs md:text-sm font-extrabold mt-1.5 font-mono ${dueAmount === 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>₹{dueAmount.toLocaleString()}</span>
+                    </div>
+
+                    <div className="bg-orange-500/10 border border-orange-500/20 p-3.5 rounded-lg flex flex-col justify-between shadow-inner">
+                      <span className="text-[10px] md:text-xs font-extrabold text-orange-600 dark:text-orange-400 uppercase tracking-wider">Refund</span>
+                      <span className="text-xs md:text-sm font-extrabold text-orange-600 dark:text-orange-300 mt-1.5 font-mono">₹{refundAmount.toLocaleString()}</span>
                     </div>
 
                     <div className={`p-3.5 rounded-lg border flex flex-col justify-between relative shadow-inner ${profitMargin >= 0 ? 'bg-teal-500/10 border-teal-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
@@ -2946,21 +2926,6 @@ const BookingDetails = () => {
                       className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
-                      Refund Amount
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="Refund Amount"
-                      value={fullEditRefundAmount}
-                      onChange={(e) => setFullEditRefundAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-[#00A89E] focus:ring-1 focus:ring-[#00A89E] rounded px-3.5 py-2 text-slate-100 text-sm focus:outline-none transition-colors"
-                    />
-                  </div>
-
-
                 </div>
 
               </div>

@@ -411,6 +411,16 @@ function updateFthdcGstAmount(doc) {
   }
 }
 
+function updateRefundAmount(doc) {
+  doc.refundAmount = (doc.payments || [])
+    .filter(payment => (
+      payment.status === 'VERIFIED' &&
+      payment.paymentFrom === 'COMPANY' &&
+      payment.paymentTo === 'TRAVELER'
+    ))
+    .reduce((sum, payment) => sum + (Number(payment.amountPaid) || 0), 0);
+}
+
 function updateProfitMargin(doc) {
   const refundTripStatuses = [
     'Postponed',
@@ -476,6 +486,9 @@ BookingSchema.pre('validate', async function (next) {
   }
 
   updateFthdcGstAmount(this);
+
+  // Refunds are the verified booking payments sent from the company to the traveller.
+  updateRefundAmount(this);
 
   updateProfitMargin(this);
 
@@ -557,6 +570,7 @@ BookingSchema.post('init', function (doc) {
   }
 
   // Recalculate Profit Margin dynamically
+  updateRefundAmount(doc);
   updateProfitMargin(doc);
 });
 
