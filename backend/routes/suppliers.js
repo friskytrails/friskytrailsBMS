@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Supplier = require('../models/Supplier');
+const Booking = require('../models/Booking');
 const { protect, verifiedOnly } = require('../middleware/auth');
 const crmDb = require('../config/crmDb');
 const upload = require('../middleware/multerConfig');
@@ -103,6 +104,84 @@ router.get("/locations", protect, verifiedOnly, async (req, res) => {
   } catch (error) {
     console.error("Error fetching website locations:", error);
     res.status(500).json({ success: false, message: "Server error while fetching locations" });
+  }
+});
+
+// @route   GET /api/suppliers/reconciliation
+// @desc    List supplier identities with live service and payment totals
+router.get('/reconciliation', protect, verifiedOnly, async (req, res) => {
+  try {
+    const { country = 'India', state, city } = req.query;
+    const supplierFilter = {};
+    const locationRegex = (value) => new RegExp(`^\\s*${value.trim().replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\s*$`, 'i');
+    if (country && country.trim()) supplierFilter.country = locationRegex(country);
+    if (state && state.trim()) supplierFilter.state = locationRegex(state);
+    if (city && city.trim()) supplierFilter.city = locationRegex(city);
+
+    const suppliers = await Supplier.find(supplierFilter)
+      .select('supplierId fullName businessName country state city totalAmountPaid status')
+      .sort({ businessName: 1, fullName: 1 })
+      .lean();
+
+    const totals = await Booking.aggregate([
+      { $unwind: '$services' },
+      { $match: { 'services.serviceStatus': { $ne: 'Cancelled No Charges' } } },
+      {
+        $project: {
+          supplierRef: { $ifNull: ['$services.supplier', '$services.supplierSupplierId'] },
+          supplierCode: '$services.supplierSupplierId',
+          serviceCount: { $literal: 1 },
+          totalAmount: { $ifNull: ['$services.b2bCost', 0] },
+          paidAmount: {
+            $reduce: {
+              input: {
+                $filter: {
+                  input: { $ifNull: ['$services.payments', []] },
+                  as: 'payment',
+                  cond: {
+                    $and: [
+                      { $eq: ['$$payment.status', 'VERIFIED'] },
+                      { $eq: ['$$payment.paymentFrom', 'Company'] },
+                      { $eq: ['$$payment.paymentTo', 'Supplier'] },
+                    ],
+                  },
+                },
+              },
+              initialValue: 0,
+              in: { $add: ['$$value', { $ifNull: ['$$this.paidAmount', 0] }] },
+            },
+          },
+        },
+      },
+      { $match: { supplierRef: { $ne: null } } },
+      {
+        $group: {
+          _id: '$supplierRef',
+          serviceCount: { $sum: '$serviceCount' },
+          totalAmount: { $sum: '$totalAmount' },
+          paidAmount: { $sum: '$paidAmount' },
+        },
+      },
+    ]);
+
+    const totalsByKey = new Map(totals.map((row) => [String(row._id), row]));
+    const data = suppliers.map((supplier) => {
+      const row = totalsByKey.get(String(supplier._id)) || totalsByKey.get(supplier.supplierId) || {};
+      const totalAmount = Number(row.totalAmount || 0);
+      const paidAmount = Number(row.paidAmount || 0);
+      return {
+        ...supplier,
+        serviceCount: Number(row.serviceCount || 0),
+        totalAmount,
+        paidAmount,
+        dueAmount: Math.max(totalAmount - paidAmount, 0),
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error loading supplier reconciliation:', error);
+    res.status(500).json({ success: false, message: 'Server error while loading supplier reconciliation' });
   }
 });
 

@@ -19,6 +19,7 @@ import AddSupplier from './pages/AddSupplier';
 import SearchSuppliers from './pages/SearchSuppliers';
 import SupplierDetails from './pages/SupplierDetails';
 import AddTodo from './pages/AddTodo';
+import SupplierReconciliation from './pages/SupplierReconciliation';
 
 function App() {
   return (
@@ -106,6 +107,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SupplierDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/supplier/recon"
+                element={
+                  <ProtectedRoute>
+                    <SupplierReconciliation />
                   </ProtectedRoute>
                 }
               />
