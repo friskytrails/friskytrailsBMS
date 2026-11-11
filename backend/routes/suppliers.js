@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Supplier = require('../models/Supplier');
 const Booking = require('../models/Booking');
+const BulkSettlement = require('../models/BulkSettlement');
 const { protect, verifiedOnly } = require('../middleware/auth');
 const crmDb = require('../config/crmDb');
 const upload = require('../middleware/multerConfig');
@@ -125,12 +127,60 @@ router.get('/reconciliation', protect, verifiedOnly, async (req, res) => {
 
     const totals = await Booking.aggregate([
       { $unwind: '$services' },
-      { $match: { 'services.serviceStatus': { $ne: 'Cancelled No Charges' } } },
       {
         $project: {
           supplierRef: { $ifNull: ['$services.supplier', '$services.supplierSupplierId'] },
           supplierCode: '$services.supplierSupplierId',
-          serviceCount: { $literal: 1 },
+          bookingId: 1,
+          travellerName: 1,
+          service: {
+            serviceId: '$services.serviceId',
+            supplierType: '$services.supplierType',
+            supplierName: '$services.supplierName',
+            supplierSupplierId: '$services.supplierSupplierId',
+            b2bCost: { $ifNull: ['$services.b2bCost', 0] },
+            totalDue: { $ifNull: ['$services.totalDue', 0] },
+            startDate: '$services.startDate',
+            endDate: '$services.endDate',
+            adults: { $ifNull: ['$services.adults', 0] },
+            children: { $ifNull: ['$services.children', 0] },
+            serviceStatus: '$services.serviceStatus',
+            mealPlan: '$services.mealPlan',
+            roomType: '$services.roomType',
+            numberOfRooms: '$services.numberOfRooms',
+            transportType: '$services.transportType',
+            productName: '$services.productName',
+            packageName: '$services.packageName',
+            outsourceName: '$services.outsourceName',
+            generatedPayments: {
+              $filter: {
+                input: { $ifNull: ['$services.payments', []] },
+                as: 'payment',
+                cond: {
+                  $or: [
+                    { $eq: ['$$payment.isGenerated', true] },
+                    { $regexMatch: { input: { $ifNull: ['$$payment.paymentId', ''] }, regex: '^GPAY-' } },
+                  ],
+                },
+              },
+            },
+            supplierPayments: {
+              $filter: {
+                input: { $ifNull: ['$services.payments', []] },
+                as: 'payment',
+                cond: {
+                  $and: [
+                    { $eq: ['$$payment.paymentFrom', 'Traveller'] },
+                    { $eq: ['$$payment.paymentTo', 'Supplier'] },
+                    { $eq: ['$$payment.accountSubMode', 'Supplier'] },
+                    { $ne: ['$$payment.isGenerated', true] },
+                  ],
+                },
+              },
+            },
+            bookingStartDate: '$startDate',
+            bookingEndDate: '$endDate',
+          },
           totalAmount: { $ifNull: ['$services.b2bCost', 0] },
           paidAmount: {
             $reduce: {
@@ -151,18 +201,83 @@ router.get('/reconciliation', protect, verifiedOnly, async (req, res) => {
               in: { $add: ['$$value', { $ifNull: ['$$this.paidAmount', 0] }] },
             },
           },
+          settledAmount: {
+            $add: [
+              { $ifNull: ['$services.collectionBySupplier', 0] },
+              {
+                $reduce: {
+                  input: {
+                    $filter: {
+                      input: { $ifNull: ['$services.payments', []] },
+                      as: 'payment',
+                      cond: { $eq: ['$$payment.status', 'VERIFIED'] },
+                    },
+                  },
+                  initialValue: 0,
+                  in: { $add: ['$$value', { $ifNull: ['$$this.paidAmount', 0] }] },
+                },
+              },
+            ],
+          },
         },
       },
       { $match: { supplierRef: { $ne: null } } },
       {
         $group: {
           _id: '$supplierRef',
-          serviceCount: { $sum: '$serviceCount' },
-          totalAmount: { $sum: '$totalAmount' },
-          paidAmount: { $sum: '$paidAmount' },
+          serviceCount: {
+            $sum: { $cond: [{ $ne: ['$service.serviceStatus', 'Cancelled No Charges'] }, 1, 0] },
+          },
+          totalAmount: {
+            $sum: { $cond: [{ $ne: ['$service.serviceStatus', 'Cancelled No Charges'] }, '$totalAmount', 0] },
+          },
+          paidAmount: {
+            $sum: { $cond: [{ $ne: ['$service.serviceStatus', 'Cancelled No Charges'] }, '$settledAmount', 0] },
+          },
+          services: {
+            $push: {
+              $mergeObjects: [
+                '$service',
+                { bookingId: '$bookingId', travellerName: '$travellerName', paidAmount: '$paidAmount', settledAmount: '$settledAmount' },
+              ],
+            },
+          },
         },
       },
     ]);
+
+    const manualSupplierPayments = await Booking.aggregate([
+      { $unwind: '$payments' },
+      {
+        $match: {
+          'payments.supplier': { $ne: null },
+          'payments.paymentFrom': 'TRAVELER',
+          'payments.paymentTo': 'SUPPLIER',
+          'payments.paymentMode': 'Supplier',
+        },
+      },
+      {
+        $group: {
+          _id: '$payments.supplier',
+          payments: {
+            $push: {
+              paymentSubdocumentId: '$payments._id',
+              paymentId: '$payments.paymentId',
+              paymentDate: '$payments.paymentDate',
+              paidAmount: '$payments.amountPaid',
+              paymentMode: '$payments.paymentMode',
+              status: '$payments.status',
+              details: '$payments.details',
+              paymentFrom: '$payments.paymentFrom',
+              paymentTo: '$payments.paymentTo',
+              bookingId: '$bookingId',
+              travellerName: '$travellerName',
+            },
+          },
+        },
+      },
+    ]);
+    const manualPaymentsBySupplier = new Map(manualSupplierPayments.map((row) => [String(row._id), row.payments]));
 
     const totalsByKey = new Map(totals.map((row) => [String(row._id), row]));
     const data = suppliers.map((supplier) => {
@@ -174,7 +289,9 @@ router.get('/reconciliation', protect, verifiedOnly, async (req, res) => {
         serviceCount: Number(row.serviceCount || 0),
         totalAmount,
         paidAmount,
-        dueAmount: Math.max(totalAmount - paidAmount, 0),
+        dueAmount: totalAmount - paidAmount,
+        services: row.services || [],
+        supplierPayments: manualPaymentsBySupplier.get(String(supplier._id)) || [],
       };
     });
 
@@ -182,6 +299,96 @@ router.get('/reconciliation', protect, verifiedOnly, async (req, res) => {
   } catch (error) {
     console.error('Error loading supplier reconciliation:', error);
     res.status(500).json({ success: false, message: 'Server error while loading supplier reconciliation' });
+  }
+});
+
+// @route POST /api/suppliers/bulk-settlements
+// Create a parent settlement while preserving every generated payment ID.
+router.post('/bulk-settlements', protect, verifiedOnly, async (req, res) => {
+  try {
+    const { supplierId, generatedItems = [] } = req.body;
+    const supplier = await Supplier.findOne({ $or: [{ _id: supplierId }, { supplierId }] });
+    if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
+    if (!Array.isArray(generatedItems) || generatedItems.length === 0) {
+      return res.status(400).json({ success: false, message: 'Select at least one generated payment ID' });
+    }
+
+    const items = [];
+    for (const requested of generatedItems) {
+      if (!requested.bookingId || !requested.serviceId || !requested.paymentSubdocumentId || !mongoose.Types.ObjectId.isValid(requested.paymentSubdocumentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid generated payment selection' });
+      }
+      const booking = await Booking.findOne({ bookingId: requested.bookingId });
+      const service = booking?.services.find((entry) => entry.serviceId === requested.serviceId && (String(entry.supplier) === String(supplier._id) || entry.supplierSupplierId === supplier.supplierId));
+      const payment = service?.payments.id(requested.paymentSubdocumentId);
+      if (!payment || (!payment.isGenerated && !String(payment.paymentId || '').startsWith('GPAY-'))) {
+        return res.status(400).json({ success: false, message: `Generated payment ${requested.paymentId || ''} was not found for this supplier` });
+      }
+      items.push({ bookingId: booking.bookingId, serviceId: service.serviceId, paymentSubdocumentId: payment._id, paymentId: payment.paymentId, amount: Number(payment.paidAmount || 0) });
+    }
+    const duplicate = await BulkSettlement.findOne({ 'generatedItems.paymentSubdocumentId': { $in: items.map(item => item.paymentSubdocumentId) } });
+    if (duplicate) return res.status(400).json({ success: false, message: 'One or more generated IDs are already included in a bulk settlement' });
+
+    const bulkSettlement = await BulkSettlement.create({
+      bulkSettlementId: `BULK-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+      supplier: supplier._id,
+      generatedItems: items,
+      createdBy: req.user._id,
+    });
+    res.status(201).json({ success: true, data: bulkSettlement });
+  } catch (error) {
+    console.error('Create bulk settlement error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Unable to create bulk settlement' });
+  }
+});
+
+// @route GET /api/suppliers/bulk-settlements?supplierId=...
+router.get('/bulk-settlements', protect, verifiedOnly, async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.supplierId) {
+      const supplier = await Supplier.findOne({ $or: [{ _id: req.query.supplierId }, { supplierId: req.query.supplierId }] }).select('_id');
+      if (!supplier) return res.json({ success: true, data: [] });
+      filter.supplier = supplier._id;
+    }
+    const data = await BulkSettlement.find(filter).populate('supplier', 'supplierId fullName businessName').sort({ createdAt: -1 }).lean();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('List bulk settlements error:', error);
+    res.status(500).json({ success: false, message: 'Unable to load bulk settlements' });
+  }
+});
+
+// @route POST /api/suppliers/bulk-settlements/:bulkSettlementId/payments
+router.post('/bulk-settlements/:bulkSettlementId/payments', protect, verifiedOnly, async (req, res) => {
+  try {
+    const bulkSettlement = await BulkSettlement.findOne({ bulkSettlementId: req.params.bulkSettlementId });
+    if (!bulkSettlement) return res.status(404).json({ success: false, message: 'Bulk settlement not found' });
+    const { paymentItems = [] } = req.body;
+    if (!Array.isArray(paymentItems) || paymentItems.length === 0) return res.status(400).json({ success: false, message: 'Select at least one supplier payment' });
+
+    const existingIds = new Set((bulkSettlement.supplierPaymentItems || []).map(item => String(item.paymentSubdocumentId)));
+    const selected = [];
+    for (const requested of paymentItems) {
+      if (!requested.bookingId || !requested.paymentSubdocumentId || !mongoose.Types.ObjectId.isValid(requested.paymentSubdocumentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid supplier payment selection' });
+      }
+      if (existingIds.has(String(requested.paymentSubdocumentId))) continue;
+      const booking = await Booking.findOne({ bookingId: requested.bookingId, 'payments._id': requested.paymentSubdocumentId });
+      const payment = booking?.payments.id(requested.paymentSubdocumentId);
+      if (!payment || String(payment.supplier) !== String(bulkSettlement.supplier) || payment.paymentFrom !== 'TRAVELER' || payment.paymentTo !== 'SUPPLIER' || payment.paymentMode !== 'Supplier') {
+        return res.status(400).json({ success: false, message: `Supplier payment ${requested.paymentId || ''} was not found for this supplier` });
+      }
+      const alreadyUsed = await BulkSettlement.exists({ 'supplierPaymentItems.paymentSubdocumentId': payment._id });
+      if (alreadyUsed) return res.status(400).json({ success: false, message: `Supplier payment ${payment.paymentId} is already assigned to a bulk settlement` });
+      selected.push({ bookingId: booking.bookingId, paymentSubdocumentId: payment._id, paymentId: payment.paymentId, amount: Number(payment.amountPaid || 0) });
+    }
+    bulkSettlement.supplierPaymentItems.push(...selected);
+    await bulkSettlement.save();
+    res.json({ success: true, data: bulkSettlement });
+  } catch (error) {
+    console.error('Apply supplier payments to bulk settlement error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Unable to apply supplier payments' });
   }
 });
 
