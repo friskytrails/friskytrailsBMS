@@ -102,6 +102,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     serviceId: null,
     paymentId: null,
     file: null,
+    paymentDate: new Date().toISOString().split('T')[0],
     paymentMode: '',
     accountSubMode: '',
     loading: false
@@ -294,12 +295,18 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
         serviceId,
         paymentId,
         file: null,
+        paymentDate: payment?.paymentDate ? toDateInputValue(payment.paymentDate) : new Date().toISOString().split('T')[0],
         paymentMode: '',
         accountSubMode: '',
         loading: false
       });
       return;
     }
+
+    const paymentDate = status === 'VERIFIED'
+      ? window.prompt('Enter the date payment was received (YYYY-MM-DD):', payment?.paymentDate ? toDateInputValue(payment.paymentDate) : new Date().toISOString().split('T')[0])
+      : undefined;
+    if (status === 'VERIFIED' && !paymentDate) return;
 
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${booking._id}/services/${serviceId}/payment/${paymentId}/verify`, {
@@ -308,7 +315,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}` 
         },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, paymentDate })
       });
       const data = await res.json();
       if (data.success) {
@@ -336,6 +343,9 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     if (!verificationModal.paymentMode) {
       return alert('Please select the payment mode.');
     }
+    if (!verificationModal.paymentDate) {
+      return alert('Please enter the date payment was received.');
+    }
     if (verificationModal.paymentMode === 'Account' && !verificationModal.accountSubMode) {
       return alert('Please select the bank account.');
     }
@@ -346,6 +356,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
     try {
       const formData = new FormData();
       formData.append('status', 'VERIFIED');
+      formData.append('paymentDate', verificationModal.paymentDate);
       formData.append('paymentMode', verificationModal.paymentMode);
       formData.append('accountSubMode', verificationModal.accountSubMode || '');
       if (verificationModal.file) formData.append('screenshot', verificationModal.file);
@@ -360,7 +371,7 @@ const ServiceOptionsTab = ({ booking, token, onServiceUpdated, user }) => {
       const data = await res.json();
       if (data.success) {
         onServiceUpdated(data.data);
-        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentMode: '', accountSubMode: '', loading: false });
+        setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentDate: new Date().toISOString().split('T')[0], paymentMode: '', accountSubMode: '', loading: false });
       } else {
         alert(data.message || 'Error verifying payment');
       }
@@ -1205,6 +1216,16 @@ Remark: ${remarkVal}`;
             </p>
             <div className="space-y-4" onPaste={handlePasteVerificationImage} tabIndex={0}>
               <div>
+                <label className="block text-xs text-slate-400 mb-1">Payment Received Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={verificationModal.paymentDate}
+                  onChange={(e) => setVerificationModal(prev => ({ ...prev, paymentDate: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200"
+                />
+              </div>
+              <div>
                 <label className="block text-xs text-slate-400 mb-1">Payment Mode *</label>
                 <select
                   required
@@ -1248,7 +1269,7 @@ Remark: ${remarkVal}`;
               </>}
               <div className="flex justify-end gap-3 mt-6">
                 <button
-                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentMode: '', accountSubMode: '', loading: false })}
+                  onClick={() => setVerificationModal({ isOpen: false, serviceId: null, paymentId: null, file: null, paymentDate: new Date().toISOString().split('T')[0], paymentMode: '', accountSubMode: '', loading: false })}
                   className="px-4 py-2 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-100 bg-slate-900 transition-colors"
                 >
                   Cancel
