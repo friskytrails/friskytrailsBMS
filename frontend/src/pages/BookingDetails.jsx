@@ -1393,47 +1393,47 @@ const BookingDetails = () => {
         </div>
 
         {/* Secondary Info Bar (Horizontal) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-5 bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
+          <div className="lg:order-1">
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Traveller Name</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
               {booking.travellerName}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Email Address</label>
-            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
-              {booking.travellerEmail || '—'}
-            </div>
-          </div>
-          <div>
+          <div className="lg:order-6 lg:col-span-2">
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Phone Number</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold truncate shadow-inner">
               {booking.travellerPhone || '—'}
             </div>
           </div>
-          <div>
+          <div className="lg:order-2 lg:col-span-2">
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Travellers</label>
             <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
               {booking.adults || 0} Adult{booking.adults !== 1 && 's'} + {booking.children || 0} Child{booking.children !== 1 && 'ren'}
             </div>
           </div>
-          <div>
+          <div className="lg:order-3">
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Package Cost</label>
-            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+            <div className="bg-slate-950 border border-slate-800 text-blue-400 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
               ₹{totalAmount.toLocaleString()}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">GST Amount</label>
-            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
-              ₹{gstAmount.toLocaleString()}
+          <div className="lg:order-5">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Due Amount</label>
+            <div className="bg-slate-950 border border-slate-800 text-rose-400 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+              ₹{dueAmount.toLocaleString()}
             </div>
           </div>
-          <div>
+          <div className="lg:order-4">
             <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Paid Amount</label>
-            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
+            <div className="bg-slate-950 border border-slate-800 text-emerald-400 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold shadow-inner">
               ₹{paidAmount.toLocaleString()}
+            </div>
+          </div>
+          <div className="lg:order-7 lg:col-span-2 min-w-0">
+            <label className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Email Address</label>
+            <div className="bg-slate-950 border border-slate-800 text-slate-205 rounded-lg px-4 py-2.5 text-sm md:text-base font-semibold break-all whitespace-normal shadow-inner">
+              {booking.travellerEmail || '—'}
             </div>
           </div>
         </div>
