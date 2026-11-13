@@ -183,6 +183,7 @@ const BookingSchema = new mongoose.Schema({
   },
   gstAmount: {
     type: Number,
+    set: value => Math.round(Number(value) || 0),
     min: [0, 'GST amount cannot be negative'],
     default: 0,
   },
@@ -407,7 +408,7 @@ function updateFthdcGstAmount(doc) {
 
   if (receivedAmount > 0) {
     // GST is inclusive in the received amount: received - (received * 100 / 105).
-    doc.gstAmount = receivedAmount - (receivedAmount * (100 / 105));
+    doc.gstAmount = Math.round(receivedAmount - (receivedAmount * (100 / 105)));
   }
 }
 
