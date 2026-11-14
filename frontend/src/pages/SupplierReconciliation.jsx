@@ -167,6 +167,30 @@ const SupplierReconciliation = () => {
     } catch (err) { setError(err.message); } finally { setActionLoading(false); }
   };
 
+  const removeGeneratedFromBulk = async (paymentSubdocumentId) => {
+    if (!selectedBulkId || !window.confirm('Remove this generated ID from the bulk settlement?')) return;
+    setActionLoading(true); setError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/suppliers/bulk-settlements/${encodeURIComponent(selectedBulkId)}/generated-items/${encodeURIComponent(paymentSubdocumentId)}`, { method: 'DELETE', headers: authHeaders });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Unable to remove generated ID');
+      await loadBulkSettlements(selectedSupplier._id);
+      setSelectedGeneratedIds((current) => current.filter((item) => String(item._id) !== String(paymentSubdocumentId)));
+    } catch (err) { setError(err.message); } finally { setActionLoading(false); }
+  };
+
+  const removeSupplierPaymentFromBulk = async (paymentSubdocumentId) => {
+    if (!selectedBulkId || !window.confirm('Remove this supplier payment from the bulk settlement?')) return;
+    setActionLoading(true); setError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/suppliers/bulk-settlements/${encodeURIComponent(selectedBulkId)}/supplier-payments/${encodeURIComponent(paymentSubdocumentId)}`, { method: 'DELETE', headers: authHeaders });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Unable to remove supplier payment');
+      await loadBulkSettlements(selectedSupplier._id);
+      setSelectedSupplierPayments((current) => current.filter((item) => String(item.paymentSubdocumentId) !== String(paymentSubdocumentId)));
+    } catch (err) { setError(err.message); } finally { setActionLoading(false); }
+  };
+
   return (
     <main className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -385,7 +409,7 @@ const SupplierReconciliation = () => {
                 </div>
                 {bulkSettlements.length ? <div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[850px] text-left text-xs"><thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wider text-slate-500"><tr><th className="px-3 py-3">Bulk Settlement ID</th><th className="px-3 py-3 text-right">Generated Total</th><th className="px-3 py-3 text-right">Supplier Payments</th><th className="px-3 py-3 text-right">Remaining</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Details</th></tr></thead><tbody className="divide-y divide-slate-100">{bulkSettlements.map((bulk) => <tr key={bulk.bulkSettlementId} className="text-slate-700"><td className="px-3 py-3 font-mono font-bold text-indigo-700">{bulk.bulkSettlementId}<span className="block mt-1 text-slate-500">{bulk.generatedItems?.length || 0} generated IDs</span></td><td className="px-3 py-3 text-right font-mono font-bold">{money(bulk.generatedTotal)}</td><td className="px-3 py-3 text-right font-mono font-bold text-emerald-700">{money(bulk.supplierPaymentTotal)}</td><td className="px-3 py-3 text-right font-mono font-bold text-rose-600">{money(bulk.remainingAmount)}</td><td className="px-3 py-3"><span className="rounded-full bg-amber-50 px-2 py-1 font-semibold text-amber-700">{bulk.status}</span></td><td className="px-3 py-3"><button type="button" onClick={() => { setSelectedBulkId(bulk.bulkSettlementId); setActiveSupplierTab('bulk'); }} className="rounded-lg bg-indigo-50 px-3 py-2 font-bold text-indigo-700 hover:bg-indigo-100">VIEW DETAILS</button></td></tr>)}</tbody></table></div> : <div className="min-h-[120px] flex items-center justify-center text-sm text-slate-500">No bulk settlements created yet. Select generated IDs first.</div>}
 
-                {selectedBulk && <div className="grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-slate-200 p-4"><h4 className="mb-2 font-extrabold text-slate-800">Generated IDs in this bulk</h4>{selectedBulk.generatedItems?.map(item => <div key={item.paymentSubdocumentId} className="flex justify-between border-t border-slate-100 py-2 text-xs"><span className="font-mono font-bold text-blue-700">{item.paymentId}</span><span>{money(item.amount)}</span></div>)}</div><div className="rounded-xl border border-slate-200 p-4"><h4 className="mb-2 font-extrabold text-slate-800">Supplier payments applied</h4>{selectedBulk.supplierPaymentItems?.length ? selectedBulk.supplierPaymentItems.map(item => <div key={item.paymentSubdocumentId} className="flex justify-between border-t border-slate-100 py-2 text-xs"><span className="font-mono font-bold text-purple-700">{item.paymentId}</span><span>{money(item.amount)}</span></div>) : <p className="text-xs text-slate-500">No supplier payments applied yet.</p>}</div></div>}
+                {selectedBulk && <div className="grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-slate-200 p-4"><h4 className="mb-2 font-extrabold text-slate-800">Generated IDs in this bulk</h4>{selectedBulk.generatedItems?.map(item => <div key={item.paymentSubdocumentId} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2 text-xs"><div><span className="font-mono font-bold text-blue-700">{item.paymentId}</span><span className="ml-3 text-slate-600">{money(item.amount)}</span></div><button type="button" onClick={() => removeGeneratedFromBulk(item.paymentSubdocumentId)} disabled={actionLoading || selectedBulk.generatedItems.length <= 1} className="rounded-md px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40">REMOVE</button></div>)}</div><div className="rounded-xl border border-slate-200 p-4"><h4 className="mb-2 font-extrabold text-slate-800">Supplier payments applied</h4>{selectedBulk.supplierPaymentItems?.length ? selectedBulk.supplierPaymentItems.map(item => <div key={item.paymentSubdocumentId} className="flex items-center justify-between gap-3 border-t border-slate-100 py-2 text-xs"><div><span className="font-mono font-bold text-purple-700">{item.paymentId}</span><span className="ml-3 text-slate-600">{money(item.amount)}</span></div><button type="button" onClick={() => removeSupplierPaymentFromBulk(item.paymentSubdocumentId)} disabled={actionLoading} className="rounded-md px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40">REMOVE</button></div>) : <p className="text-xs text-slate-500">No supplier payments applied yet.</p>}</div></div>}
               </div>
             ) : (
               <div className="min-h-[220px] bg-white p-6 flex items-center justify-center text-sm text-slate-500">{supplierTabs.find((tab) => tab.id === activeSupplierTab)?.label} details will appear here.</div>

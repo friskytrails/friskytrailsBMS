@@ -359,6 +359,53 @@ router.get('/bulk-settlements', protect, verifiedOnly, async (req, res) => {
   }
 });
 
+// @route DELETE /api/suppliers/bulk-settlements/:bulkSettlementId/generated-items/:paymentSubdocumentId
+// Remove a generated payment ID from a bulk settlement without deleting the original payment.
+router.delete('/bulk-settlements/:bulkSettlementId/generated-items/:paymentSubdocumentId', protect, verifiedOnly, async (req, res) => {
+  try {
+    const { bulkSettlementId, paymentSubdocumentId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(paymentSubdocumentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid generated payment ID' });
+    }
+    const bulkSettlement = await BulkSettlement.findOne({ bulkSettlementId });
+    if (!bulkSettlement) return res.status(404).json({ success: false, message: 'Bulk settlement not found' });
+    if (bulkSettlement.generatedItems.length <= 1) {
+      return res.status(400).json({ success: false, message: 'A bulk settlement must keep at least one generated ID' });
+    }
+    const itemExists = bulkSettlement.generatedItems.some((item) => String(item.paymentSubdocumentId) === paymentSubdocumentId);
+    if (!itemExists) return res.status(404).json({ success: false, message: 'Generated payment is not linked to this bulk settlement' });
+
+    bulkSettlement.generatedItems = bulkSettlement.generatedItems.filter((item) => String(item.paymentSubdocumentId) !== paymentSubdocumentId);
+    await bulkSettlement.save();
+    res.json({ success: true, data: bulkSettlement });
+  } catch (error) {
+    console.error('Remove generated payment from bulk settlement error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Unable to remove generated payment' });
+  }
+});
+
+// @route DELETE /api/suppliers/bulk-settlements/:bulkSettlementId/supplier-payments/:paymentSubdocumentId
+// Remove a supplier payment from a bulk settlement without deleting the original payment.
+router.delete('/bulk-settlements/:bulkSettlementId/supplier-payments/:paymentSubdocumentId', protect, verifiedOnly, async (req, res) => {
+  try {
+    const { bulkSettlementId, paymentSubdocumentId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(paymentSubdocumentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid supplier payment ID' });
+    }
+    const bulkSettlement = await BulkSettlement.findOne({ bulkSettlementId });
+    if (!bulkSettlement) return res.status(404).json({ success: false, message: 'Bulk settlement not found' });
+    const itemExists = bulkSettlement.supplierPaymentItems.some((item) => String(item.paymentSubdocumentId) === paymentSubdocumentId);
+    if (!itemExists) return res.status(404).json({ success: false, message: 'Supplier payment is not linked to this bulk settlement' });
+
+    bulkSettlement.supplierPaymentItems = bulkSettlement.supplierPaymentItems.filter((item) => String(item.paymentSubdocumentId) !== paymentSubdocumentId);
+    await bulkSettlement.save();
+    res.json({ success: true, data: bulkSettlement });
+  } catch (error) {
+    console.error('Remove supplier payment from bulk settlement error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Unable to remove supplier payment' });
+  }
+});
+
 // @route POST /api/suppliers/bulk-settlements/:bulkSettlementId/payments
 router.post('/bulk-settlements/:bulkSettlementId/payments', protect, verifiedOnly, async (req, res) => {
   try {
